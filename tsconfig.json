@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "target": "ESNext",
+    "module": "esnext",
+    "moduleResolution": "Bundler",
+    "forceConsistentCasingInFileNames": true,
+    "paths": {
+      "@cmshiki/core": ["./packages/shiki/src/index.ts"],
+      "@cmshiki/utils": ["./packages/utils/src/index.ts"],
+      "@cmshiki/editor": ["./packages/editor/src/index.ts"]
+    },
+    "types": ["vitest/globals"]
+  }
+}

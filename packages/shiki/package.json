@@ -1,0 +1,45 @@
+{
+  "name": "@cmshiki/shiki",
+  "version": "0.1.1",
+  "description": "use shiki to highlight code in CodeMirror editor",
+  "license": "MIT",
+  "files": [
+    "README.md",
+    "dist",
+    "package.json"
+  ],
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/index.cjs",
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "author": "uxiew",
+  "bugs": {
+    "url": "https://github.com/uxiew/codemirror-shiki/issues"
+  },
+  "homepage": "https://github.com/uxiew/codemirror-shiki#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/uxiew/codemirror-shiki.git"
+  },
+  "scripts": {
+    "test": "vitest",
+    "dev": "unbuild --stub",
+    "build": "unbuild",
+    "prepublishOnly": "nr build"
+  },
+  "dependencies": {
+    "@cmshiki/utils": "workspace:*",
+    "@codemirror/commands": "^6.6.0",
+    "@codemirror/language": "^6.10.2",
+    "@codemirror/state": "^6.4.1",
+    "@codemirror/view": "^6.28.4",
+    "shiki": "^1.10.3"
+  }
+}

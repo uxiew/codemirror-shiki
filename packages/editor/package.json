@@ -1,0 +1,10 @@
+{
+  "name": "@cmshiki/editor",
+  "version": "0.1.1",
+  "dependencies": {
+    "@cmshiki/shiki": "workspace:*",
+    "@codemirror/state": "^6.4.1",
+    "@codemirror/view": "^6.28.4",
+    "shiki": "^1.10.3"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "codemirror-shiki",
+  "private": "true",
+  "author": "uxiew",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/uxiew/codemirror-shiki/issues"
+  },
+  "homepage": "https://github.com/uxiew/codemirror-shiki#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/uxiew/codemirror-shiki.git"
+  },
+  "scripts": {
+    "test": "vitest",
+    "build": "pnpm -r build",
+    "publish": "pnpm -r publish --  --access public"
+  },
+  "devDependencies": {
+    "jsdom": "^24.1.0",
+    "typescript": "^5.5.3",
+    "unbuild": "^2.0.0",
+    "vitest": "^2.0.3"
+  }
+}

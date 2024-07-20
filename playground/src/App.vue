@@ -1,0 +1,56 @@
+<template>
+  <Shiki
+    :theme="theme"
+    :grammar="grammar"
+    @changeLang="changeLang"
+    @changeTheme="changeTheme"
+  >
+    <template #codemirror>
+      <CodeMirror v-bind="cmProps" />
+    </template>
+  </Shiki>
+</template>
+
+<script setup lang="ts">
+import CodeMirror from './CodeMirror.vue';
+import Shiki from './Shiki.vue';
+
+const theme = useStorage('tm-theme', 'github-light');
+const grammar = useStorage('tm-grammar', 'typescript');
+
+export interface CMProps {
+  lang: {
+    name: string;
+    value: string;
+    grammar: any;
+  };
+  theme: {
+    name: string;
+    value: string;
+  };
+}
+
+const cmProps = reactive<CMProps>({
+  lang: {
+    name: grammar.value,
+    value: grammar.value,
+    grammar: grammar.value
+  },
+  theme: { name: theme.value, value: theme.value }
+});
+
+const changeLang = ({ name, value, grammar: langGrammar }: CMProps['lang']) => {
+  grammar.value = name;
+  cmProps.lang.name = name;
+  cmProps.lang.value = value;
+  cmProps.lang.grammar = langGrammar;
+};
+
+const changeTheme = ({ name, value }: CMProps['theme']) => {
+  theme.value = name;
+  cmProps.theme.name = name;
+  cmProps.theme.value = value;
+};
+</script>
+
+<style scoped></style>
