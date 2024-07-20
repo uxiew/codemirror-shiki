@@ -23,8 +23,7 @@ export class ShikiEditor {
     }
 
     constructor(parent: HTMLElement, initialCode: string = '', options: any) {
-
-
+        
         this.view = new EditorView({
             state: EditorState.create({
                 doc: initialCode,

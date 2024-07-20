@@ -6,7 +6,7 @@ on:
       - 'v*'
 
 jobs:
-  publish-npm:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,13 +21,37 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install
-      - run: pnpm build
+
+      - name: Build
+        run: pnpm build
 
       - name: Run Test
         run: pnpm test
 
+  publish-npm:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
       - name: Publish NPM
         uses: JS-DevTools/npm-publish@v3
         with:
           token: ${{ secrets.NPM_TOKEN }}
           registry: 'https://registry.npmjs.org/'
+
+  deploy:
+    environment:
+      name: github-pages
+      url: https://uxiew.github.io/codemirror-shiki/
+    needs: build
+    runs-on: ubuntu-latest
+    name: Deploy
+    steps:
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v4
+        if: github.ref == 'refs/heads/main'
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./playground/dist

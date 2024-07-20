@@ -1,14 +1,14 @@
-# codemirror-shiki
+# cmshiki
 
 [WIP]!!!
 
-A CodeMirror 6 extension that provides syntax highlighting using [Shiki](https://github.com/shikijs/shiki).
-custom themes or language syntax, also support [custom themes](https://github.com/shikijs/shiki/blob/main/docs/themes.md#custom-themes) and [custom languages](https://github.com/shikijs/shiki/blob/main/docs/languages.md#custom-languages).
+A code editor based on [CodeMirror](https://codemirror.net/) that using [Shiki](https://github.com/shikijs/shiki) highlighting.
+support [custom themes](https://github.com/shikijs/shiki/blob/main/docs/themes.md#custom-themes) and [custom languages](https://github.com/shikijs/shiki/blob/main/docs/languages.md#custom-languages).
 
 ## Install
 
 ```sh
-> pnpm install codemirror-shiki
+> npm install @cmshiki/shiki
 ```
 
 ## Usage
@@ -16,7 +16,7 @@ custom themes or language syntax, also support [custom themes](https://github.co
 ```ts
 // import shiki and codemirror etc.
 ...
-import { shikiToCodeMirror } from 'codemirror-shiki'
+import { shikiToCodeMirror } from '@cmshiki/shiki'
 
 // create shiki highlighter first
 const highlighter = await createHighlighter({
@@ -25,15 +25,18 @@ const highlighter = await createHighlighter({
 });
 
 // combine shiki highlighter whith codemirror
-const { shiki, actions } = shikiToCodeMirror(highlighter, {
+const { shiki, actions } = await shikiToCodeMirror(highlighter, {
+  ...
   lang: 'typescript',
-  theme: 'github-dark'
+  theme: 'github-dark',
+  ...
 });
 
 // create codemirror instance
 const editor = new EditorView({
+    //...
     doc: `console.log('codemirror-shiki')`,
-    ...,
+    //...
     extensions: [
         shiki,
         ...
@@ -41,10 +44,11 @@ const editor = new EditorView({
 });
 
 // use actions here
-actions.update(theme.name);
-actions.updateTheme(theme.name);
-...
+actions.update({
+  theme:theme.name
+});
 
+actions.setTheme(theme.name);
 ```
 
 ## TODO
@@ -53,6 +57,6 @@ actions.updateTheme(theme.name);
 - [x] multiple themes support
 - [ ] theme customizable
 
-## see some others
+## see others
 
 [react-codemirror's themes](https://uiwjs.github.io/react-codemirror/#/theme/data/dracula) also support some themes look like shiki but not exactly.

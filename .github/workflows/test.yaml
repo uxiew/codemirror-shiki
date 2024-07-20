@@ -9,21 +9,35 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v2
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
         with:
-          node-version: '20'、
-          
+          node-version: '20'
+
       - name: Install pnpm
         uses: pnpm/action-setup@v4
-        name: Install pnpm
         with:
           version: '9.0.6'
+        env:
+          PNPM_HOME: ~/.pnpm
+          PNPM_CACHE_FOLDER: ~/.pnpm-store
 
-      - name: Install dependencies
+      - name: Cache node_modules
+        uses: actions/cache@v3
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-node-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install Dependencies
         run: pnpm install
 
-      - run: pnpm run build
+      - name: Build and cache build artifacts
+        run: pnpm run build
 
-      - name: Run test
-      - run: pnpm run test
+      - name: Run Tests
+        run: pnpm run test
