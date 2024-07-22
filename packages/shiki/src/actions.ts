@@ -7,7 +7,7 @@ import {
 } from "./types/types";
 
 /**
- * `getShikiHi` only can resolved after the editor's extensions registered
+ * `getShikiHi` only be resolved after the editor's extensions registered
  */
 export default function useActions(getShikiHi: () => Promise<ShikiHighlighter>,
     csOptions: CmSkOptions) {

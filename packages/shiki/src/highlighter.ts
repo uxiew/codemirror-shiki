@@ -213,9 +213,9 @@ export class ShikiHighlighter {
     /**
     * add highlighting to text
     *
-    * @param builder 范围集合构建器，用于添加装饰
-    * @param doc 内容
-    * @param offset 文本偏移量
+    * @param text content text
+    * @param offset text offset
+    * @returns `{ decorations }` an object that contains decorative information
     */
     highlight(text: string, offset: number) {
         const { cssVariablePrefix, defaultColor } = this.options
