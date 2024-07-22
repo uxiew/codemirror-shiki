@@ -1,5 +1,5 @@
 {
-  "name": "cmshiki-playground",
+  "name": "playground",
   "type": "module",
   "private": true,
   "packageManager": "pnpm@9.0.6",

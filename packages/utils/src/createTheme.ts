@@ -30,7 +30,6 @@ export interface CreateThemeOptions {
     classes?: { [selector: string]: StyleSpec; }
 }
 
-// TODO cursor style???
 export interface ThemeSettings {
     /** Editor background color. */
     background?: string;
@@ -38,7 +37,7 @@ export interface ThemeSettings {
     backgroundImage?: string;
     /** Default text color. */
     foreground?: string;
-    /** Caret color. */
+    /** Cursor Caret color. */
     caret?: string;
     /** Selection background. */
     selection?: string;
@@ -129,7 +128,7 @@ export const createTheme = ({ theme, settings = {}, classes }: CreateThemeOption
         };
     }
 
-    // other custom class
+    // other custom classes
     if (classes) {
         themeOptions = {
             ...themeOptions,

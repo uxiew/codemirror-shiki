@@ -1,6 +1,18 @@
 {
   "name": "@cmshiki/editor",
   "version": "0.1.1",
+  "description": "CodeMirror editor with Shiki syntax highlighting",
+  "files": [
+    "README.md",
+    "dist",
+    "package.json"
+  ],
+  "keywords": [
+    "codemirror",
+    "codemirror-editor",
+    "shiki-editor",
+    "codemirror-shiki-editor"
+  ],
   "dependencies": {
     "@cmshiki/shiki": "workspace:*",
     "@codemirror/state": "^6.4.1",

@@ -1,5 +1,5 @@
-import { type ShikiHighlighter } from "./shikiHighlighter";
-import { updateGenerateOptions } from "./shikiViewPlugin";
+import { type ShikiHighlighter } from "./highlighter";
+import { updateGenerateOptions } from "./viewPlugin";
 import {
     type CmSkOptions,
     type CmSkUpdateOptions,

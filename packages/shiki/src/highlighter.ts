@@ -1,6 +1,7 @@
-import { Compartment } from "@codemirror/state"
+import { Extension, Compartment, Facet } from "@codemirror/state"
 import { Decoration, EditorView } from "@codemirror/view"
 import {
+    ThemeRegistrationAny,
     type TokensResult,
     codeToTokens,
     getTokenStyleObject,
@@ -10,23 +11,25 @@ import {
     type Highlighter,
     type ThemeOptions,
     type CmSHOptions,
-    type CmSkUpdateOptions
+    type CmSkUpdateOptions,
 } from "./types/types"
 import { toStyleObject } from "./utils"
 import {
     mountStyles, StyleModule,
     createTheme,
-    type CreateThemeOptions
+    type CreateThemeOptions,
 } from "@cmshiki/utils"
 
 export const themeCompartment = new Compartment
+
 
 export class ShikiHighlighter {
     /** Shiki core highlighter */
 
     private genTokens: (code: string) => TokensResult
-    private currentTheme: string = 'light'
-    private themeCache = new Map<string, CreateThemeOptions>()
+    private themesCache = new Map<string, Extension>()
+    private currentTheme = 'light'
+    private defaultTheme = EditorView.baseTheme({})
 
     /** determines whether the theme style of the current option is `cm` or not */
     get isCmStyle() {
@@ -40,16 +43,15 @@ export class ShikiHighlighter {
     /** 
      *  default theme extension
      */
-    initDefaultTheme() {
+    of() {
         const { getTheme } = this.loadThemes()
         const { defaultColor } = this.options
         if (defaultColor === false) {
-            return themeCompartment.of(EditorView.baseTheme({}))
-        } else {
-            // init current theme
-            this.currentTheme = defaultColor
+            return themeCompartment.of(this.defaultTheme)
         }
-        return themeCompartment.of(createTheme(getTheme(this.currentTheme)))
+        // init current theme
+        this.currentTheme = defaultColor || 'light'
+        return [themeCompartment.of(getTheme(this.currentTheme))]
     }
 
     /**
@@ -66,63 +68,103 @@ export class ShikiHighlighter {
      * @param highlighter Shiki highlighter
      */
     setTheme({ theme: name }: ThemeOptions) {
-        if (this.currentTheme === name) return
+        const { themes } = this.options
+        const { getTheme, registeredIds } = this.loadThemes()
+
+        if (this.currentTheme === name || !themes) return
         if (typeof name !== 'string') throw new Error("Theme name must be a string!")
-        if (!this.options.themes) return console.warn(`thmes not setting, can change theme!`)
 
-        const { currentThemes, getTheme, registeredThemes } = this.loadThemes()
+        if (!themes[name] && !registeredIds[name])
+            return console.warn(`Theme ${name} not registered!`)
 
-        // TODO
-        // if (registeredThemes.includes(name)) 
-
-        if (!this.options.themes[name] && !currentThemes[name]) return console.warn(`Theme ${name} not found!`)
-        name = (currentThemes[name] || this.options.themes[name] && name) as string
+        name = registeredIds[name] || name
 
         this.view?.dispatch({
-            effects: themeCompartment.reconfigure(createTheme(getTheme(name)))
+            effects: themeCompartment.reconfigure(getTheme(name))
         })
 
         // update relative option
         this.currentTheme = name
     }
 
-    /**
-     * TODO when theme == RawTheme
-     */
     loadThemes() {
         const themeIds = this.highlighter.getLoadedThemes()
         let { theme, themes, cssVariablePrefix, defaultColor } = this.options
 
-        const defaultThemeName = theme ? theme : themes?.light || (themes && defaultColor) ? themes[defaultColor as string] : null
-        if (defaultThemeName === null) throw new Error("shiki's default theme not found!")
-        if (typeof defaultThemeName !== 'string') {
-            // TODO defaultThemeName?.settings
+        const defaultTheme = theme ? theme : themes?.light || (themes && defaultColor) ? themes[defaultColor as string] : null
+        if (!defaultTheme) throw new Error("shiki's default theme not found!")
+        if (typeof defaultTheme !== 'string') {
+            // TODO a textmate theme?
             throw new Error("Shiki's TextMate theme Object not currently supported!")
         }
 
-        themes = {
-            light: defaultThemeName,
+        const _themes: Record<string, string | ThemeRegistrationAny> = {
+            light: defaultTheme,
             ...themes
         }
-        const themeIndex = themeIds.indexOf(defaultThemeName)
-        const themesIds = Object.keys(themes)
-        const currentThemes: Record<string, string> = {}
 
-        themesIds.reduce((t, id) => {
-            const prefix = cssVariablePrefix + id
-            currentThemes[themes[id] as string] = id
-            if (this.themeCache.get(id)) {
-                t[id] = this.themeCache.get(id)!
-                return t
+        // const themeIndex = themeIds.indexOf(defaultTheme)
+        const registeredIds = themeIds.reduce((n, c) => { n[c] = ''; return n },
+            {} as Record<string, string>)
+
+        const getThemeName = (theme: string | ThemeRegistrationAny) => typeof theme === 'string' ? theme : theme.name
+
+
+        Object.keys(_themes).forEach((k) => {
+            const name = getThemeName(_themes[k])
+            if (!name) throw new Error(`a textmate theme must have a name`);
+            registeredIds[name] = themeIds.indexOf(name) > -1 ? k : ''
+        })
+
+        /**
+         * 获取主题
+         *
+         * @param {string} name `light\dark\...`
+         * @returns {Extension} codemirror theme extension
+         * @throws `Theme not registered!`
+         */
+        const getTheme = (name: string) => {
+            if (!_themes[name]) {
+                console.warn(`Theme ${name} is not set!`)
+                return this.defaultTheme
+            }
+            const prefix = cssVariablePrefix + name
+            // internal handled cached
+            const { colors, bg, fg, } = this.highlighter.getTheme(_themes[name])
+
+            console.log(theme);
+            const _name = getThemeName(_themes[name])!;
+            if (this.themesCache.get(_name)) {
+                return this.themesCache.get(_name)!
             }
 
-            const theme = this.highlighter.getTheme(themes[id]!)
-            t[id] = {
-                theme: themes[id]! as string,
-                settings: {
-                    background: theme.bg,
-                    foreground: theme.fg
-                },
+            let settings: CreateThemeOptions['settings'] = {
+                background: bg,
+                foreground: fg,
+            }
+
+            if (colors) {
+                settings = {
+                    ...settings,
+                    gutterBackground: bg,
+                    gutterForeground: fg,
+                    // fontFamily
+                    // fontSize
+                    // gutterActiveForeground
+                    gutterBorder: 'transparent',
+                    selection: colors['editor.wordHighlightBackground'] || colors['editor.selectionBackground'],
+                    selectionMatch: colors['editor.wordHighlightStrongBackground'] || colors['editor.selectionBackground'],
+                    caret: colors['editorCursor.foreground'] || colors['foreground'],
+                    // dropdownBackground: colors['dropdown.background'],
+                    // dropdownBorder: colors['dropdown.border'] || colors['foreground'],
+                    lineHighlight: colors['editor.lineHighlightBackground'] || colors['editor.background'],
+                    // matchingBracket: colors['editorBracketMatch.background'] || colors['editor.lineHighlightBackground'] || colors['editor.selectionBackground'],
+                }
+            }
+
+            const extension = createTheme({
+                theme: name,
+                settings,
                 classes: {
                     [`& .cm-line span`]: {
                         color: `var(${prefix}) !important`,
@@ -132,21 +174,27 @@ export class ShikiHighlighter {
                         textDecoration: `var(${prefix}-text-decoration) !important`
                     }
                 }
-            }
-            this.themeCache.set(id, t[id])
-            return t
-        }, {} as Record<string, CreateThemeOptions>)
+            })
+            this.themesCache.set(_name, extension)
+            return extension
+        }
 
         return {
-            currentThemes,
-            registeredThemes: themeIds,
-            themesCssVars: themesIds.map((id) => cssVariablePrefix + id),
-            defaultThemeId: themeIds[themeIndex],
-            getTheme: (name: string): CreateThemeOptions => {
-                const cmTheme = this.themeCache.get(name)
-                if (cmTheme === null) throw new Error(`${themes[name]} theme not found, check options!`)
-                return cmTheme!
-            }
+            /** 
+             * The theme id corresponds to themes name
+             * 
+             * @example
+             *
+             * ```ts
+             * {
+             *  'github-light': light,
+             *  ....
+             * }
+             * ```
+             * 
+             */
+            registeredIds,
+            getTheme
         }
     }
 
@@ -169,57 +217,10 @@ export class ShikiHighlighter {
     * @param doc 内容
     * @param offset 文本偏移量
     */
-    highlight(builder: any, text: string, offset: number) {
+    highlight(text: string, offset: number) {
         const { cssVariablePrefix, defaultColor } = this.options
         const { tokens, fg = '', bg = '', rootStyle = '' } = this.genTokens(text);
-
-        // this.themeCache.get
-        let cmClasses: Record<string, string> = {};
-
-        let pos = offset;
-        tokens.forEach((lines) => {
-            lines.forEach((token) => {
-                let style = (token.htmlStyle || stringifyTokenStyle(getTokenStyleObject(token)))
-                    .replace(/color/g, cssVariablePrefix + defaultColor);
-
-                ['font-style', 'font-weight', 'text-decoration'].forEach((s) => {
-                    style = style.replace(new RegExp(`;` + s, 'g'), `;${cssVariablePrefix + defaultColor}-${s}`)
-                });
-
-                cmClasses[style] = cmClasses[style] || StyleModule.newName()
-
-                let from = pos;
-                let to = pos + token.content.length;
-                builder.add(from, to, Decoration.mark({
-                    tagName: 'span',
-                    attributes: {
-                        [this.isCmStyle ? 'class' : 'style']:
-                            this.isCmStyle ? cmClasses[style] : style,
-                    },
-                }));
-                pos = to;
-            })
-            pos++; // 为换行符增加位置
-        })
-
-        if (this.isCmStyle) {
-            Object.entries(cmClasses).forEach(([k, v]) => {
-                mountStyles(this.view!, {
-                    [`& .cm-line .${v}`]: toStyleObject(k)
-                })
-            })
-        }
-    }
-    /**
-    * add highlighting to text
-    *
-    * @param builder 范围集合构建器，用于添加装饰
-    * @param doc 内容
-    * @param offset 文本偏移量
-    */
-    highlight1(text: string, offset: number) {
-        const { cssVariablePrefix, defaultColor } = this.options
-        const { tokens, fg = '', bg = '', rootStyle = '' } = this.genTokens(text);
+        console.log("highlight1", this.genTokens(text))
 
         const decorations: { from: number, to: number, mark: Decoration }[] = []
         // this.themeCache.get
@@ -235,7 +236,7 @@ export class ShikiHighlighter {
                     style = style.replace(new RegExp(`;` + s, 'g'), `;${cssVariablePrefix + defaultColor}-${s}`)
                 });
 
-                console.log("highlight", pos, token.content, offset);
+                console.log("highlight1", token);
 
 
                 cmClasses[style] = cmClasses[style] || StyleModule.newName()

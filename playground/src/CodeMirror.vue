@@ -77,11 +77,11 @@ if (transaction) {
 
 async function changeShikiTheme() {
   const name = await editorActions.value!.getCurrentTheme();
+  console.log(name);
   const allThemes = ['light', 'dark', 'dim'];
-  editorActions.value?.setTheme({
+  await editorActions.value?.setTheme({
     theme: allThemes[allThemes.indexOf(name) + 1] || allThemes[0]
   });
-  console.log(await editorActions.value?.getCurrentTheme());
 }
 
 async function run() {
@@ -111,12 +111,16 @@ async function run() {
   const { shiki, actions } = await shikiToCodeMirror(highlighter, {
     lang: props.lang.name,
     theme: props.theme.name,
+    // theme: {
+    //   name: props.theme.name
+    // },
     themes: {
       light: 'github-dark',
       dark: 'github-light',
       dim: 'one-dark-pro'
       // any number of themes
     },
+    includeExplanation: true,
     cssVariablePrefix: '--cm-'
     // defaultColor: false
     // // optional customizations

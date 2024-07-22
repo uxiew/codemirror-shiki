@@ -1,8 +1,14 @@
 {
   "name": "@cmshiki/shiki",
   "version": "0.1.1",
-  "description": "use shiki to highlight code in CodeMirror editor",
+  "description": "use shiki to highlight code in CodeMirror",
   "license": "MIT",
+  "keywords": [
+    "codemirror",
+    "shiki",
+    "codemirror-shiki",
+    "codemirror-plugin"
+  ],
   "files": [
     "README.md",
     "dist",
@@ -34,12 +40,14 @@
     "build": "unbuild",
     "prepublishOnly": "nr build"
   },
+  "peerDependencies": {
+    "@codemirror/state": "^6.4.0",
+    "@codemirror/view": "^6.4.0",
+    "shiki": "^1.10.0"
+  },
   "dependencies": {
     "@cmshiki/utils": "workspace:*",
     "@codemirror/commands": "^6.6.0",
-    "@codemirror/language": "^6.10.2",
-    "@codemirror/state": "^6.4.1",
-    "@codemirror/view": "^6.28.4",
-    "shiki": "^1.10.3"
+    "@codemirror/language": "^6.10.2"
   }
 }

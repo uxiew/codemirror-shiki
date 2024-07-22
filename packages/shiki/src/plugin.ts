@@ -1,8 +1,8 @@
 
 import {
   shikiViewPlugin,
-} from "./shikiViewPlugin"
-import { ShikiHighlighter } from "./shikiHighlighter"
+} from "./viewPlugin"
+import { ShikiHighlighter } from "./highlighter"
 import {
   type Highlighter,
   type CmSHOptions,
@@ -21,7 +21,7 @@ export const shikiPlugin = async (highlighter: Highlighter, ctOptions: CmSkOptio
   return {
     actions: useActions(getShikiHighlighter, ctOptions),
     shiki: [
-      ShikiHighlighter.init(highlighter, ctOptions as CmSHOptions).initDefaultTheme(),
+      ShikiHighlighter.init(highlighter, ctOptions as CmSHOptions).of(),
       viewPlugin as Extension,
     ]
   }

@@ -1,4 +1,4 @@
-import { type ShikiHighlighter } from '../shikiHighlighter'
+import { type ShikiHighlighter } from '../highlighter'
 import {
     BundledLanguage, BundledTheme,
     CodeOptionsMultipleThemes,

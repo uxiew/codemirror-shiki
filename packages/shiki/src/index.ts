@@ -9,8 +9,7 @@ import {
 import defaultOptions from "./config";
 
 export { type ShikiPluginActions } from "./plugin";
-export { shikiViewPlugin } from "./shikiViewPlugin";
-
+export { shikiViewPlugin } from "./viewPlugin";
 
 type ShikiHighlightExtension = (ctOptions: CmSkOptions) => Extension
 type ShikiExtensions = Extension

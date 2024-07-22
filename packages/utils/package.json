@@ -1,11 +1,16 @@
 {
   "name": "@cmshiki/utils",
   "version": "0.1.1",
+  "description": "Utilities for CodeMirror",
   "license": "MIT",
   "files": [
     "README.md",
     "dist",
     "package.json"
+  ],
+  "keywords": [
+    "codemirror",
+    "codemirror-plugin"
   ],
   "type": "module",
   "main": "dist/index.cjs",

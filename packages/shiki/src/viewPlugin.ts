@@ -18,7 +18,7 @@ import {
 } from './types/types';
 import {
     ShikiHighlighter,
-} from './shikiHighlighter';
+} from './highlighter';
 
 /** update theme options */
 export const updateGenerateOptions = StateEffect.define<Partial<CmSkUpdateOptions>>()
@@ -48,10 +48,9 @@ class ShikiView {
 
     highlightDocument(doc: Text) {
         const builder = new RangeSetBuilder<Decoration>();
-        this.shikiRenderer.highlight(builder, doc.sliceString(0), 0)
-        // this.shikiRenderer.highlight(doc.sliceString(0), 0).decorations.forEach(({ from, to, mark }) => {
-        //     builder.add(from, to, mark)
-        // })
+        this.shikiRenderer.highlight(doc.sliceString(0), 0).decorations.forEach(({ from, to, mark }) => {
+            builder.add(from, to, mark)
+        })
         return builder.finish();
     }
 
@@ -69,10 +68,9 @@ class ShikiView {
             });
             // highlight the changed part
             const text = doc.sliceString(range.from, range.to);
-            this.shikiRenderer.highlight(builder, text, range.from)
-            // this.shikiRenderer.highlight(text, range.from).decorations.forEach(({ from, to, mark }) => {
-            //     builder.add(from, to, mark)
-            // })
+            this.shikiRenderer.highlight(text, range.from).decorations.forEach(({ from, to, mark }) => {
+                builder.add(from, to, mark)
+            })
             lastPos = range.to;
         }
 
