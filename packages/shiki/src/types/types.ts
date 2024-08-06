@@ -52,7 +52,7 @@ export interface BaseOptions {
 
 type Options<L extends string = string, T extends string = string> = Omit<CodeToTokensOptions<L, T>, 'lang' | 'theme'> & BaseOptions
 
-export type CmSkOptions<Languages extends string = string, Themes extends string = string> = Options<Languages, Themes> & Partial<ExtraOptions>
+export type CmSkOptions<Languages extends string = string, Themes extends string = string> = Omit<Options<Languages, Themes>, 'includeExplanation'> & Partial<ExtraOptions>
 
 export type CmSHOptions<Languages extends string = string, Themes extends string = string> = Options<Languages, Themes> & ExtraOptions
 

@@ -23,7 +23,7 @@ export function classList(view: EditorView) {
  */
 export function getClasses(view: EditorView) {
     return view.themeClasses.split(' ').filter(id => !!id.trim())
-    // [baseId,baseDarkID : baseLightID, mainId]
+    // [baseId, baseDarkID/baseLightID, themeId]
 }
 
 /**

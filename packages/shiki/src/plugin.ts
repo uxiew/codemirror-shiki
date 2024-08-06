@@ -8,7 +8,6 @@ import {
   type CmSHOptions,
   type CmSkOptions,
 } from './types/types'
-import { type Extension } from "@codemirror/state";
 import useActions from "./actions";
 
 // export type ThemeOptions = { bg: string, fg: string, rootStyle?: string }
@@ -22,7 +21,7 @@ export const shikiPlugin = async (highlighter: Highlighter, ctOptions: CmSkOptio
     actions: useActions(getShikiHighlighter, ctOptions),
     shiki: [
       ShikiHighlighter.init(highlighter, ctOptions as CmSHOptions).of(),
-      viewPlugin as Extension,
+      viewPlugin,
     ]
   }
 }

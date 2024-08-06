@@ -14,6 +14,7 @@ import {
   lineNumbers,
   highlightActiveLine
 } from '@codemirror/view';
+import { minimalSetup } from 'codemirror';
 
 import { rust } from '@codemirror/lang-rust';
 import {
@@ -25,6 +26,8 @@ import {
   type ShikiPluginActions,
   shikiToCodeMirror
 } from '.././../packages/shiki/src';
+
+import { javascript } from '@codemirror/lang-javascript';
 
 import { onMounted, ref } from 'vue';
 import { type CMProps } from './App.vue';
@@ -64,14 +67,6 @@ if (transaction) {
       }
     });
     console.log(v, props);
-
-    // editorActions.value?.update({
-    //   lang: props.lang.name,
-    //   theme: props.theme.name
-    //   // themes: { light: 'github-dark', dark: 'github-light', dim: 'one-dark-pro' },
-    //   // cssVariablePrefix: 'ss',
-    //   // defaultColor: false,
-    // });
   }
 );
 
@@ -85,7 +80,7 @@ async function changeShikiTheme() {
 }
 
 async function run() {
-  console.log('codemirror-props', props, rust());
+  console.log('codemirror-props', props.theme, props.lang);
 
   const lang = {
     name: props.lang.name,
@@ -108,19 +103,21 @@ async function run() {
     langs: [props.lang.name, 'vue', 'rust', 'typescript', 'astro']
   });
 
+  /**
+   *  | 'includeExplanation'
+   */
   const { shiki, actions } = await shikiToCodeMirror(highlighter, {
     lang: props.lang.name,
-    theme: props.theme.name,
+    theme: 'one-dark-pro',
     // theme: {
     //   name: props.theme.name
     // },
     themes: {
-      light: 'github-dark',
-      dark: 'github-light',
-      dim: 'one-dark-pro'
+      light: 'one-dark-pro',
+      dark: 'github-dark',
+      dim: 'github-light'
       // any number of themes
     },
-    includeExplanation: true,
     cssVariablePrefix: '--cm-'
     // defaultColor: false
     // // optional customizations
@@ -136,16 +133,19 @@ async function run() {
     doc: props.lang.value,
     parent: editorView.value,
     extensions: [
+      minimalSetup,
       keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
       highlightSpecialChars(),
       drawSelection(),
       lineNumbers(),
       highlightActiveLine(),
-      // shikiWidgetPlugin(highlighter)
+      // javascript({
+      //   typescript: true
+      // })
       shiki
+      // shikiWidgetPlugin(highlighter)
+      // shiki,
       // solarizedDark,
-      // shikiPluign(),
-      // shiki()
       // syntaxHighlighting(defaultHighlightStyle)
       // oneDark,
       // oneDarkTheme,

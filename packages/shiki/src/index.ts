@@ -11,9 +11,6 @@ import defaultOptions from "./config";
 export { type ShikiPluginActions } from "./plugin";
 export { shikiViewPlugin } from "./viewPlugin";
 
-type ShikiHighlightExtension = (ctOptions: CmSkOptions) => Extension
-type ShikiExtensions = Extension
-
 /**
  * integrate the Shiki highlighter to CodeMirror
  * @param { Highlighter } highlighter Shiki Highlighter instance

@@ -43,11 +43,9 @@
   "peerDependencies": {
     "@codemirror/state": "^6.4.0",
     "@codemirror/view": "^6.4.0",
-    "shiki": "^1.10.0"
+    "@shikijs/core": "^1.12.1"
   },
   "dependencies": {
-    "@cmshiki/utils": "workspace:*",
-    "@codemirror/commands": "^6.6.0",
-    "@codemirror/language": "^6.10.2"
+    "@cmshiki/utils": "workspace:*"
   }
 }

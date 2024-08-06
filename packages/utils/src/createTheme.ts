@@ -1,7 +1,7 @@
 import { EditorView } from '@codemirror/view';
 import { Extension } from '@codemirror/state';
 // import { HighlightStyle, type TagStyle, syntaxHighlighting } from '@codemirror/language';
-import { type StyleSpec } from '@cmshiki/utils';
+import { type StyleSpec } from 'style-mod';
 
 interface Nothing {
 }
@@ -62,6 +62,13 @@ export interface ThemeSettings {
 export const createTheme = ({ theme, settings = {}, classes }: CreateThemeOptions): Extension => {
     let themeOptions: Record<string, StyleSpec> = {
         '.cm-gutters': {},
+        // fix 
+        '& .cm-content': {
+            padding: '0 4px 0 6px',
+            '& .cm-line': {
+                padding: 0
+            }
+        }
     };
     const baseStyle: StyleSpec = {};
     if (settings.background) {
@@ -107,20 +114,29 @@ export const createTheme = ({ theme, settings = {}, classes }: CreateThemeOption
     if (settings.gutterActiveForeground) {
         activeLineGutterStyle.color = settings.gutterActiveForeground;
     }
+
     if (settings.lineHighlight) {
-        themeOptions['.cm-activeLine'] = {
-            backgroundColor: settings.lineHighlight,
+        themeOptions['&.cm-editor'] = {
+            "& .cm-activeLine": {
+                backgroundColor: settings.lineHighlight,
+            }
         };
         activeLineGutterStyle.backgroundColor = settings.lineHighlight;
     }
     themeOptions['.cm-activeLineGutter'] = activeLineGutterStyle;
 
     if (settings.selection) {
-        themeOptions[
-            '&.cm-focused .cm-selectionBackground, & .cm-line::selection, & .cm-selectionLayer .selectionBackground, .cm-content ::selection'
-        ] = {
-            background: settings.selection + ' !important',
-        };
+        themeOptions["&.cm-editor"] = {
+            "& .cm-line": {
+                "& ::selection, &::selection": { backgroundColor: settings.selection + ' !important' },
+            },
+            "& .cm-selectionBackground": {
+                backgroundColor: settings.selection + ' !important',
+            },
+            "& .cm-selectionLayer .selectionBackground": {
+                backgroundColor: settings.selection + ' !important',
+            }
+        }
     }
     if (settings.selectionMatch) {
         themeOptions['& .cm-selectionMatch'] = {

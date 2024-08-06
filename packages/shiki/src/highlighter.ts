@@ -1,12 +1,13 @@
-import { Extension, Compartment, Facet } from "@codemirror/state"
+import { Extension, Compartment, Text } from "@codemirror/state"
 import { Decoration, EditorView } from "@codemirror/view"
 import {
-    ThemeRegistrationAny,
-    type TokensResult,
-    codeToTokens,
     getTokenStyleObject,
     stringifyTokenStyle,
-} from "shiki/core"
+    type ThemeRegistrationAny,
+    codeToTokens,
+    type GrammarState
+} from '@shikijs/core'
+
 import {
     type Highlighter,
     type ThemeOptions,
@@ -26,7 +27,6 @@ export const themeCompartment = new Compartment
 export class ShikiHighlighter {
     /** Shiki core highlighter */
 
-    private genTokens: (code: string) => TokensResult
     private themesCache = new Map<string, Extension>()
     private currentTheme = 'light'
     private defaultTheme = EditorView.baseTheme({})
@@ -132,7 +132,6 @@ export class ShikiHighlighter {
             // internal handled cached
             const { colors, bg, fg, } = this.highlighter.getTheme(_themes[name])
 
-            console.log(theme);
             const _name = getThemeName(_themes[name])!;
             if (this.themesCache.get(_name)) {
                 return this.themesCache.get(_name)!
@@ -198,35 +197,43 @@ export class ShikiHighlighter {
         }
     }
 
-    constructor(public highlighter: Highlighter, public options: CmSHOptions, public view?: EditorView) {
+    constructor(public highlighter: Highlighter, private options: CmSHOptions, public view?: EditorView) {
         this.loadThemes()
-        this.genTokens = (code: string) => {
-            try {
-                // @ts-expect-error params type redefined.
-                return codeToTokens(this.highlighter, code, this.options)
-            } catch (error) {
-                throw new Error
-            }
-        }
+    }
+
+
+    getLastGrammarState(preCode: string) {
+        const { lang, theme } = this.options
+        // @ts-ignore 
+        return this.highlighter.getLastGrammarState(preCode, {
+            lang,
+            theme,
+        })
+    }
+
+    private codeToTokens(code: string, preStateStack?: GrammarState) {
+        // @ts-expect - error this.options
+        return codeToTokens(this.highlighter, code, { ...this.options, grammarState: preStateStack })
     }
 
     /**
     * add highlighting to text
     *
-    * @param text content text
-    * @param offset text offset
+    * @param doc content text
+    * @param from text start
+    * @param to text end
     * @returns `{ decorations }` an object that contains decorative information
     */
-    highlight(text: string, offset: number) {
-        const { cssVariablePrefix, defaultColor } = this.options
-        const { tokens, fg = '', bg = '', rootStyle = '' } = this.genTokens(text);
-        console.log("highlight1", this.genTokens(text))
+    highlight(doc: Text, from: number, to: number, buildDeco: (from: number, to: number, mark: Decoration) => void, preState?: GrammarState) {
+        const { lang, themes, cssVariablePrefix, defaultColor, tokenizeMaxLineLength = 20000, tokenizeTimeLimit = 500 } = this.options
 
-        const decorations: { from: number, to: number, mark: Decoration }[] = []
+        const content = doc.sliceString(from, to);
+        const { tokens, fg = '', bg = '', rootStyle = '' } = this.codeToTokens(content, preState)
+        let pos = from;
+
         // this.themeCache.get
         let cmClasses: Record<string, string> = {};
 
-        let pos = offset;
         tokens.forEach((lines) => {
             lines.forEach((token) => {
                 let style = (token.htmlStyle || stringifyTokenStyle(getTokenStyleObject(token)))
@@ -236,23 +243,22 @@ export class ShikiHighlighter {
                     style = style.replace(new RegExp(`;` + s, 'g'), `;${cssVariablePrefix + defaultColor}-${s}`)
                 });
 
-                console.log("highlight1", token);
-
-
+                // dedupe and cache the style
                 cmClasses[style] = cmClasses[style] || StyleModule.newName()
 
                 let to = pos + token.content.length;
-                decorations.push({
-                    from: pos,
+                // build decoration
+                buildDeco(
+                    pos,
                     to,
-                    mark: Decoration.mark({
+                    Decoration.mark({
                         tagName: 'span',
                         attributes: {
                             [this.isCmStyle ? 'class' : 'style']:
                                 this.isCmStyle ? cmClasses[style] : style,
                         },
                     })
-                })
+                )
                 pos = to;
             })
             pos++; // 为换行符增加位置
@@ -265,8 +271,6 @@ export class ShikiHighlighter {
                 })
             })
         }
-
-        return { decorations }
     }
 
     // TODO some option cannot be updated
