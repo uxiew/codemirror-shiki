@@ -27,7 +27,7 @@ importers:
   packages/editor:
     dependencies:
       '@cmshiki/shiki':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../shiki
       '@codemirror/state':
         specifier: ^6.4.1
@@ -42,7 +42,7 @@ importers:
   packages/shiki:
     dependencies:
       '@cmshiki/utils':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../utils
       '@codemirror/state':
         specifier: ^6.4.1
