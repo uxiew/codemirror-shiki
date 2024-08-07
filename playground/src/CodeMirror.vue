@@ -31,11 +31,6 @@ import { javascript } from '@codemirror/lang-javascript';
 
 import { onMounted, ref } from 'vue';
 import { type CMProps } from './App.vue';
-import {
-  createHighlighter,
-  createShikiInternal,
-  createHighlighterCore
-} from 'shiki';
 
 const props = defineProps<CMProps>();
 
@@ -91,42 +86,25 @@ async function run() {
     value: props.theme.value
   };
 
-  // loads the themes and languages specified.
-  const highlighter = await createHighlighter({
-    themes: [
-      props.theme.value,
-      'one-dark-pro',
-      'dracula',
-      'github-light',
-      'github-dark'
-    ],
-    langs: [props.lang.name, 'vue', 'rust', 'typescript', 'astro']
-  });
-
   /**
    *  | 'includeExplanation'
    */
-  const { shiki, actions } = await shikiToCodeMirror(highlighter, {
+  const { shiki, actions } = await shikiToCodeMirror({
     lang: props.lang.name,
     theme: 'one-dark-pro',
     // theme: {
     //   name: props.theme.name
     // },
-    themes: {
-      light: 'one-dark-pro',
-      dark: 'github-dark',
-      dim: 'github-light'
-      // any number of themes
-    },
+    // themes: {
+    //   light: 'one-dark-pro',
+    //   dark: 'github-dark',
+    //   dim: 'github-light'
+    //   // any number of themes
+    // },
     cssVariablePrefix: '--cm-'
     // defaultColor: false
     // // optional customizations
     // defaultColor: 'light'
-    // themes: {
-    //   light: 'one-dark-pro',
-    //   dra: 'dracula',
-    //   onedark: 'one-dark-pro'
-    // }
   });
 
   editor.value = new EditorView({

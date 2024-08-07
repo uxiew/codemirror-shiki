@@ -3,16 +3,17 @@ import { Decoration, EditorView } from "@codemirror/view"
 import {
     getTokenStyleObject,
     stringifyTokenStyle,
-    type ThemeRegistrationAny,
     codeToTokens,
-    type GrammarState
+    type ThemeRegistrationAny,
+    type GrammarState,
+    type CodeToTokensOptions,
 } from '@shikijs/core'
 
-import {
-    type Highlighter,
-    type ThemeOptions,
-    type CmSHOptions,
-    type CmSkUpdateOptions,
+import type {
+    Highlighter,
+    ThemeOptions,
+    CmSkUpdateOptions,
+    ShikiToCMOptions,
 } from "./types/types"
 import { toStyleObject } from "./utils"
 import {
@@ -36,7 +37,7 @@ export class ShikiHighlighter {
         return this.options.themeStyle === 'cm'
     }
 
-    static init(highlighter: Highlighter, options: CmSHOptions, view?: EditorView) {
+    static init(highlighter: Highlighter, options: ShikiToCMOptions, view?: EditorView) {
         return new ShikiHighlighter(highlighter, options, view)
     }
 
@@ -89,9 +90,10 @@ export class ShikiHighlighter {
 
     loadThemes() {
         const themeIds = this.highlighter.getLoadedThemes()
-        let { theme, themes, cssVariablePrefix, defaultColor } = this.options
+        let { themes, cssVariablePrefix, defaultColor } = this.options
 
-        const defaultTheme = theme ? theme : themes?.light || (themes && defaultColor) ? themes[defaultColor as string] : null
+        const defaultTheme = themes?.light || (themes && defaultColor) ? themes[defaultColor as string] : null
+
         if (!defaultTheme) throw new Error("shiki's default theme not found!")
         if (typeof defaultTheme !== 'string') {
             // TODO a textmate theme?
@@ -197,23 +199,23 @@ export class ShikiHighlighter {
         }
     }
 
-    constructor(public highlighter: Highlighter, private options: CmSHOptions, public view?: EditorView) {
+    constructor(public highlighter: Highlighter, private options: ShikiToCMOptions, public view?: EditorView) {
         this.loadThemes()
     }
 
 
     getLastGrammarState(preCode: string) {
-        const { lang, theme } = this.options
-        // @ts-ignore 
-        return this.highlighter.getLastGrammarState(preCode, {
-            lang,
-            theme,
-        })
+        const { lang, themes } = this.options
+        const { currentTheme } = this
+        // TODO!!!
+        // return this.highlighter.getLastGrammarState(preCode, {
+        //     lang,
+        //     theme: themes[currentTheme]
+        // })
     }
 
     private codeToTokens(code: string, preStateStack?: GrammarState) {
-        // @ts-expect - error this.options
-        return codeToTokens(this.highlighter, code, { ...this.options, grammarState: preStateStack })
+        return codeToTokens(this.highlighter, code, this.options as CodeToTokensOptions)
     }
 
     /**
@@ -225,7 +227,7 @@ export class ShikiHighlighter {
     * @returns `{ decorations }` an object that contains decorative information
     */
     highlight(doc: Text, from: number, to: number, buildDeco: (from: number, to: number, mark: Decoration) => void, preState?: GrammarState) {
-        const { lang, themes, cssVariablePrefix, defaultColor, tokenizeMaxLineLength = 20000, tokenizeTimeLimit = 500 } = this.options
+        const { lang, themes, cssVariablePrefix, defaultColor, tokenizeMaxLineLength, tokenizeTimeLimit } = this.options
 
         const content = doc.sliceString(from, to);
         const { tokens, fg = '', bg = '', rootStyle = '' } = this.codeToTokens(content, preState)

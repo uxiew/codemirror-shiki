@@ -1,7 +1,13 @@
-import { type Extension } from "@codemirror/state";
 import {
-    type Highlighter,
-    type CmSkOptions,
+    type ThemeInput,
+    LanguageInput,
+    createShikiInternal,
+    getSingletonHighlighterCore
+} from "@shikijs/core";
+import wasmInlined from "@shikijs/core/wasm-inlined";
+import type {
+    Options,
+    ShikiToCMOptions,
 } from "./types/types";
 import {
     shikiPlugin,
@@ -11,19 +17,48 @@ import defaultOptions from "./config";
 export { type ShikiPluginActions } from "./plugin";
 export { shikiViewPlugin } from "./viewPlugin";
 
+
+function getShikiInternal(options: ShikiToCMOptions) {
+    const themes: ThemeInput[] = Object.values(options.themes).map((theme) => import(
+        `../node_modules/tm-themes/themes/${theme}.json`
+    ).then((m) => m.default))
+
+    const langs: LanguageInput[] = [import(
+        `../node_modules/tm-grammars/grammars/${options.lang}.json`)
+        .then((m) => m.default)]
+
+    return createShikiInternal({
+        langs,
+        themes,
+        langAlias: options.langAlias,
+        warnings: options.warnings,
+        loadWasm: wasmInlined
+    })
+}
+
 /**
  * integrate the Shiki highlighter to CodeMirror
  * @param { Highlighter } highlighter Shiki Highlighter instance
  * @param  { GenerateOptions } options
  */
-export async function shikiToCodeMirror(highlighter: Highlighter, options: CmSkOptions) {
-
-    if (highlighter) {
-        return await shikiPlugin(highlighter, {
-            ...defaultOptions,
-            ...options
-        })
-    } else {
-        throw new Error("should provide shiki's highlighter!")
+export async function shikiToCodeMirror(shikiOptions: Options) {
+    const { theme, themes } = shikiOptions
+    if (!themes) {
+        if (theme) {
+            shikiOptions.themes = {
+                light: theme,
+            }
+        } else {
+            throw new Error('[@cmshiki/shiki]' + 'Invalid options, either `theme` or `themes` must be provided')
+        }
     }
+
+    const options = {
+        ...defaultOptions,
+        ...shikiOptions
+    } as ShikiToCMOptions
+
+    const shikiMiniCore = await getShikiInternal(options)
+
+    return shikiPlugin(shikiMiniCore, options)
 }

@@ -1,13 +1,12 @@
 
 import { EditorView, ViewUpdate, ViewPlugin, DecorationSet, Decoration } from "@codemirror/view"
 import { EditorState, StateEffect, Extension } from "@codemirror/state"
-import { shikiToCodeMirror, shikiViewPlugin } from '@cmshiki/core'
 import {
     createShikiInternal,
     type HighlighterCoreOptions
 } from 'shiki/core';
 import getWasm from 'shiki/wasm';
-import { CmSkOptions } from "../../shiki/src/types";
+import type { ShikiToCMOptions } from "../../shiki/src/types/types";
 
 const updateSyntax = StateEffect.define<string>()
 const updateTheme = StateEffect.define<string>()
@@ -23,7 +22,7 @@ export class ShikiEditor {
     }
 
     constructor(parent: HTMLElement, initialCode: string = '', options: any) {
-        
+
         this.view = new EditorView({
             state: EditorState.create({
                 doc: initialCode,
@@ -34,7 +33,7 @@ export class ShikiEditor {
         })
     }
 
-    async init(options: CmSkOptions) {
+    async init(options: ShikiToCMOptions) {
         const highlighter = await createShikiInternal({
             theme: this.currentTheme,
             langs: [this.currentLang],

@@ -41,11 +41,13 @@
     "prepublishOnly": "nr build"
   },
   "peerDependencies": {
-    "@codemirror/state": "^6.4.0",
-    "@codemirror/view": "^6.4.0",
-    "@shikijs/core": "^1.12.1"
+    "@codemirror/view": "^6.4.0"
   },
   "dependencies": {
-    "@cmshiki/utils": "workspace:*"
+    "@cmshiki/utils": "workspace:^",
+    "@codemirror/state": "^6.4.1",
+    "@shikijs/core": "^1.12.1",
+    "tm-grammars": "^1.13.12",
+    "tm-themes": "^1.5.4"
   }
 }

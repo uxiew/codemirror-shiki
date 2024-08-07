@@ -45,7 +45,7 @@ importers:
         specifier: workspace:*
         version: link:../utils
       '@codemirror/state':
-        specifier: ^6.4.0
+        specifier: ^6.4.1
         version: 6.4.1
       '@codemirror/view':
         specifier: ^6.4.0
@@ -53,6 +53,12 @@ importers:
       '@shikijs/core':
         specifier: ^1.12.1
         version: 1.12.1
+      tm-grammars:
+        specifier: ^1.13.12
+        version: 1.13.12
+      tm-themes:
+        specifier: ^1.5.4
+        version: 1.5.4
 
   packages/utils:
     dependencies:
@@ -93,8 +99,8 @@ importers:
         specifier: ^6.0.1
         version: 6.0.1(@lezer/common@1.2.1)
       shiki:
-        specifier: ^1.12.1
-        version: 1.12.1
+        specifier: ^1.10.3
+        version: 1.10.3
       tm-grammars:
         specifier: ^1.13.11
         version: 1.13.12
@@ -2646,9 +2652,6 @@ packages:
 
   shiki@1.10.3:
     resolution: {integrity: sha512-eneCLncGuvPdTutJuLyUGS8QNPAVFO5Trvld2wgEq1e002mwctAhJKeMGWtWVXOIEzmlcLRqcgPSorR6AVzOmQ==}
-
-  shiki@1.12.1:
-    resolution: {integrity: sha512-nwmjbHKnOYYAe1aaQyEBHvQymJgfm86ZSS7fT8OaPRr4sbAcBNz7PbfAikMEFSDQ6se2j2zobkXvVKcBOm0ysg==}
 
   siginfo@2.0.0:
     resolution: {integrity: sha512-ybx0WO1/8bSBLEWXZvEd7gMW3Sn3JFlW3TvX1nREbDLRNQNaeNN8WK0meBwPdAaOI7TtRRRJn/Es1zhrrCHu7g==}
@@ -5855,11 +5858,6 @@ snapshots:
   shiki@1.10.3:
     dependencies:
       '@shikijs/core': 1.10.3
-      '@types/hast': 3.0.4
-
-  shiki@1.12.1:
-    dependencies:
-      '@shikijs/core': 1.12.1
       '@types/hast': 3.0.4
 
   siginfo@2.0.0: {}

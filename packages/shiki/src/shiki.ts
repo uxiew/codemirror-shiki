@@ -5,10 +5,15 @@ import {
     stringifyTokenStyle,
     type ThemedTokenWithVariants,
     type ThemedToken,
-    codeToTokens
+    GrammarState,
+    isPlainLang,
+    isNoneTheme,
+    ShikiError,
+    tokenizeWithTheme,
 } from "@shikijs/core"
 import { StackElementMetadata, StateStack } from "@shikijs/core/textmate"
 import {
+    type BaseOptions,
     type CmSHOptions,
     type Highlighter,
 } from "./types/types"
@@ -21,7 +26,7 @@ interface Options {
     tokenizeTimeLimit: any
 }
 
-type Theme = { color: string, theme: Required<CmSHOptions>['theme'] }
+type Theme = { color: string, theme: BaseOptions['theme'] }
 
 /**
  * Break tokens from multiple themes into same tokenization.
@@ -143,10 +148,7 @@ class ShikiTokenizer {
 
     private getThemes() {
         let themes: Theme[] = []
-        const { theme, themes: athemes, defaultColor } = this.options
-        if (theme) {
-            themes = [{ color: 'light', theme }]
-        }
+        const { themes: athemes, defaultColor } = this.options
         if (athemes) {
             themes = Object.entries(athemes)
                 .filter(i => i[1])

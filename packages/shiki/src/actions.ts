@@ -1,7 +1,6 @@
 import { type ShikiHighlighter } from "./highlighter";
 import { updateGenerateOptions } from "./viewPlugin";
 import {
-    type CmSkOptions,
     type CmSkUpdateOptions,
     type ThemeOptions
 } from "./types/types";
@@ -9,8 +8,7 @@ import {
 /**
  * `getShikiHi` only be resolved after the editor's extensions registered
  */
-export default function useActions(getShikiHi: () => Promise<ShikiHighlighter>,
-    csOptions: CmSkOptions) {
+export default function useActions(getShikiHi: () => Promise<ShikiHighlighter>) {
 
     return {
         /**

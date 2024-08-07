@@ -11,11 +11,11 @@ import {
     Text,
 } from "@codemirror/state"
 
-import {
-    type CmSkOptions,
-    type CmSHOptions,
-    type CmSkUpdateOptions,
-    type Highlighter,
+import type {
+    CmSHOptions,
+    CmSkUpdateOptions,
+    Highlighter,
+    ShikiToCMOptions,
 } from './types/types';
 import {
     ShikiHighlighter,
@@ -95,10 +95,15 @@ class ShikiView {
                 return;
             }
 
-            const preState = this.shikiRenderer.getLastGrammarState(doc.sliceString(this.lastPos.from, preLine.to))
+            this.shikiRenderer.update({
+                grammarContextCode: doc.sliceString(this.lastPos.from, preLine.to)
+            })
 
+            // only one line, rerender all code
             if (newLineA.number === 1) {
-                preState == undefined
+                this.shikiRenderer.update({
+                    grammarContextCode: undefined
+                })
             } else {
                 // unchanged part
                 this.decorations.between(from, preLine.to, (from, to, value) => {
@@ -109,7 +114,7 @@ class ShikiView {
             // TODO 之前的挂载样式存在，需要清理？
             this.shikiRenderer.highlight(doc, newLineA.from, to, (from, to, mark) => {
                 builder.add(from, to, mark);
-            }, preState)
+            })
 
             this.lastPos.from = from
             this.lastPos.to = to
@@ -162,7 +167,7 @@ class ShikiView {
     }
 }
 
-export const shikiViewPlugin = (highlighter: Highlighter, genOptions: CmSkOptions) => {
+export const shikiViewPlugin = (highlighter: Highlighter, genOptions: ShikiToCMOptions) => {
     let shPromise: () => Promise<ShikiHighlighter> = () => Promise.reject(new Error('[@cmshiki/shiki] ' + "`actions` can only be used after @cmshiki/shiki is initialized!"));
 
     return {
@@ -171,7 +176,7 @@ export const shikiViewPlugin = (highlighter: Highlighter, genOptions: CmSkOption
         viewPlugin: ViewPlugin.define((view: EditorView) => {
             let shikiHighlighter = new ShikiHighlighter(
                 highlighter,
-                genOptions as CmSHOptions,
+                genOptions,
                 view)
             shPromise = () => Promise.resolve(shikiHighlighter)
             return new ShikiView(shikiHighlighter, view)

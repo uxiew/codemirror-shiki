@@ -103,7 +103,8 @@ async function run(fetchInput = true) {
     themeData.value = themeObject;
     highlighter = await createHighlighterCore({
       themes: [themeObject],
-      langs: await Promise.all(Array.from(langs.values()))
+      langs: await Promise.all(Array.from(langs.values())),
+      loadWasm: () => import('shiki/wasm')
     });
 
     highlight();

@@ -1,6 +1,6 @@
 import { type CreateThemeOptions } from "../../utils/src/createTheme"
 import {
-    type CmSkOptions,
+    type ShikiToCMOptions,
 } from "./types/types"
 
 
@@ -37,7 +37,7 @@ export function toStyleObject(styleStr: string, isBgStyle: boolean = false) {
 /**
  * get color style string like shiki using multiple themes
  */
-export function createColorsStyle(options: CmSkOptions, cacheThemes: Map<string, CreateThemeOptions>) {
+export function createColorsStyle(options: ShikiToCMOptions, cacheThemes: Map<string, CreateThemeOptions>) {
     // @ts-ignore
     const { theme, themes, defaultColor = false, cssVariablePrefix = '--shiki-' } = options
     let color = ''
