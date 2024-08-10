@@ -1,236 +1,132 @@
-import { Extension, Compartment, Text } from "@codemirror/state"
-import { Decoration, EditorView } from "@codemirror/view"
-import {
-    getTokenStyleObject,
-    stringifyTokenStyle,
-    codeToTokens,
-    type ThemeRegistrationAny,
-    type GrammarState,
-    type CodeToTokensOptions,
-} from '@shikijs/core'
+import { Text } from "@codemirror/state";
+import { Decoration, EditorView } from "@codemirror/view";
 
 import type {
-    Highlighter,
-    ThemeOptions,
-    CmSkUpdateOptions,
+    MessageEventData,
+    ResultData,
     ShikiToCMOptions,
-} from "./types/types"
-import { toStyleObject } from "./utils"
-import {
-    mountStyles, StyleModule,
-    createTheme,
-    type CreateThemeOptions,
-} from "@cmshiki/utils"
-
-export const themeCompartment = new Compartment
+    CmSkUpdateOptions,
+    HighlightParams,
+} from "./types/types";
+import { mountStyles, StyleModule } from "@cmshiki/utils";
+import { toStyleObject } from "./utils";
+import { getTokenStyleObject, stringifyTokenStyle } from "@shikijs/core";
 
 
-export class ShikiHighlighter {
-    /** Shiki core highlighter */
+interface ShikiWorker {
+    worker: Worker;
+    on: (cb: any) => void;
+    post: (data: any) => void;
+    do: (data: any) => Promise<ResultData>;
+}
 
-    private themesCache = new Map<string, Extension>()
-    private currentTheme = 'light'
-    private defaultTheme = EditorView.baseTheme({})
 
-    /** determines whether the theme style of the current option is `cm` or not */
-    get isCmStyle() {
-        return this.options.themeStyle === 'cm'
-    }
+export class HighlightWorker {
 
-    static init(highlighter: Highlighter, options: ShikiToCMOptions, view?: EditorView) {
-        return new ShikiHighlighter(highlighter, options, view)
-    }
+    private shikiWorker: ShikiWorker
+    private queue: Array<{ id: number, resolve: (value: any) => void }> = [];
+    private currentId = 0;
 
-    /** 
-     *  default theme extension
-     */
-    of() {
-        const { getTheme } = this.loadThemes()
-        const { defaultColor } = this.options
-        if (defaultColor === false) {
-            return themeCompartment.of(this.defaultTheme)
-        }
-        // init current theme
-        this.currentTheme = defaultColor || 'light'
-        return [themeCompartment.of(getTheme(this.currentTheme))]
-    }
 
-    /**
-     * get the applied theme
-     */
-    getCurrentTheme() {
-        return this.currentTheme
-    }
-
-    /**
-     * user can change theme by calling this method
-     * toggle cmStyle css and className
-     * 
-     * @param highlighter Shiki highlighter
-     */
-    setTheme({ theme: name }: ThemeOptions) {
-        const { themes } = this.options
-        const { getTheme, registeredIds } = this.loadThemes()
-
-        if (this.currentTheme === name || !themes) return
-        if (typeof name !== 'string') throw new Error("Theme name must be a string!")
-
-        if (!themes[name] && !registeredIds[name])
-            return console.warn(`Theme ${name} not registered!`)
-
-        name = registeredIds[name] || name
-
-        this.view?.dispatch({
-            effects: themeCompartment.reconfigure(getTheme(name))
+    private initWorker(url: string, options: ShikiToCMOptions) {
+        const _worker = new Worker(new URL(url, import.meta.url), {
+            type: "module",
+            name: "HighlightWorker",
         })
 
-        // update relative option
-        this.currentTheme = name
-    }
+        let listeners: ((arg: ResultData) => any)[] = []
 
-    loadThemes() {
-        const themeIds = this.highlighter.getLoadedThemes()
-        let { themes, cssVariablePrefix, defaultColor } = this.options
+        const on = (cb: (arg: ResultData) => void) => {
+            listeners.push(cb)
+            _worker.addEventListener('message', (e) => {
+                listeners.forEach(evt => {
+                    evt(e.data)
+                });
 
-        const defaultTheme = themes?.light || (themes && defaultColor) ? themes[defaultColor as string] : null
-
-        if (!defaultTheme) throw new Error("shiki's default theme not found!")
-        if (typeof defaultTheme !== 'string') {
-            // TODO a textmate theme?
-            throw new Error("Shiki's TextMate theme Object not currently supported!")
-        }
-
-        const _themes: Record<string, string | ThemeRegistrationAny> = {
-            light: defaultTheme,
-            ...themes
-        }
-
-        // const themeIndex = themeIds.indexOf(defaultTheme)
-        const registeredIds = themeIds.reduce((n, c) => { n[c] = ''; return n },
-            {} as Record<string, string>)
-
-        const getThemeName = (theme: string | ThemeRegistrationAny) => typeof theme === 'string' ? theme : theme.name
-
-
-        Object.keys(_themes).forEach((k) => {
-            const name = getThemeName(_themes[k])
-            if (!name) throw new Error(`a textmate theme must have a name`);
-            registeredIds[name] = themeIds.indexOf(name) > -1 ? k : ''
-        })
-
-        /**
-         * 获取主题
-         *
-         * @param {string} name `light\dark\...`
-         * @returns {Extension} codemirror theme extension
-         * @throws `Theme not registered!`
-         */
-        const getTheme = (name: string) => {
-            if (!_themes[name]) {
-                console.warn(`Theme ${name} is not set!`)
-                return this.defaultTheme
-            }
-            const prefix = cssVariablePrefix + name
-            // internal handled cached
-            const { colors, bg, fg, } = this.highlighter.getTheme(_themes[name])
-
-            const _name = getThemeName(_themes[name])!;
-            if (this.themesCache.get(_name)) {
-                return this.themesCache.get(_name)!
-            }
-
-            let settings: CreateThemeOptions['settings'] = {
-                background: bg,
-                foreground: fg,
-            }
-
-            if (colors) {
-                settings = {
-                    ...settings,
-                    gutterBackground: bg,
-                    gutterForeground: fg,
-                    // fontFamily
-                    // fontSize
-                    // gutterActiveForeground
-                    gutterBorder: 'transparent',
-                    selection: colors['editor.wordHighlightBackground'] || colors['editor.selectionBackground'],
-                    selectionMatch: colors['editor.wordHighlightStrongBackground'] || colors['editor.selectionBackground'],
-                    caret: colors['editorCursor.foreground'] || colors['foreground'],
-                    // dropdownBackground: colors['dropdown.background'],
-                    // dropdownBorder: colors['dropdown.border'] || colors['foreground'],
-                    lineHighlight: colors['editor.lineHighlightBackground'] || colors['editor.background'],
-                    // matchingBracket: colors['editorBracketMatch.background'] || colors['editor.lineHighlightBackground'] || colors['editor.selectionBackground'],
-                }
-            }
-
-            const extension = createTheme({
-                theme: name,
-                settings,
-                classes: {
-                    [`& .cm-line span`]: {
-                        color: `var(${prefix}) !important`,
-                        // backgroundColor: `var(${prefix}-bg) !important`,
-                        fontStyle: `var(${prefix}-font-style) !important`,
-                        fontWeight: `var(${prefix}-font-weight) !important`,
-                        textDecoration: `var(${prefix}-text-decoration) !important`
-                    }
+                if ((e.data as ResultData).type === 'highlight') {
+                    this.handleMessage(e.data)
                 }
             })
-            this.themesCache.set(_name, extension)
-            return extension
+        }
+
+        // shikiWorker.onerror = (e) => {
+        //     // console.error(shikiWorker.name, e)
+        //     listeners = []
+        // }
+        /**
+         * webworker postMessage
+         */
+        function post(data: MessageEventData['data']) {
+            _worker.postMessage(data)
+        }
+
+        function process(data: MessageEventData['data']): Promise<ResultData> {
+            post(data)
+            return new Promise((resolve, reject) => {
+                on((e) => {
+                    if (e.type === data.type) {
+                        resolve(e)
+                    }
+                })
+            })
         }
 
         return {
-            /** 
-             * The theme id corresponds to themes name
-             * 
-             * @example
-             *
-             * ```ts
-             * {
-             *  'github-light': light,
-             *  ....
-             * }
-             * ```
-             * 
-             */
-            registeredIds,
-            getTheme
+            worker: _worker,
+            on,
+            post,
+            do: process,
+            // TODO 插件错误，销毁当前的 worker
+            dead() {
+                _worker.terminate()
+                // @ts-expect-error clear listeners
+                listeners = null, shikiWorker = null
+            }
         }
     }
 
-    constructor(public highlighter: Highlighter, private options: ShikiToCMOptions, public view?: EditorView) {
-        this.loadThemes()
+    init() {
+        /** worker message */
+        return this.shikiWorker.do({
+            type: 'init',
+            options: this.options
+        }) as Promise<ResultData>
     }
 
 
-    getLastGrammarState(preCode: string) {
-        const { lang, themes } = this.options
-        const { currentTheme } = this
-        // TODO!!!
-        // return this.highlighter.getLastGrammarState(preCode, {
-        //     lang,
-        //     theme: themes[currentTheme]
+    constructor(workerUrl: string, private options: ShikiToCMOptions) {
+        this.shikiWorker = this.initWorker(workerUrl, options)
+    }
+
+    update(options: CmSkUpdateOptions) {
+        this.options = {
+            ...this.options,
+            ...options
+        }
+        this.shikiWorker.post({
+            type: 'update',
+            options: this.options
+        })
+    }
+
+
+    handleTokens(
+        data: ResultData['tokensResult'], from: number, to: number,
+        postActions: HighlightParams['postActions']
+    ) {
+        const { themeStyle, defaultColor, cssVariablePrefix, } = this.options
+        const { buildDeco, handleStyles } = postActions
+        const isCmStyle = themeStyle === 'cm'
+
+        // const { data: { tokensInfo: { tokens, fg = '', bg = '', rootStyle = '' } } } = await this.shikiWorker.do({
+        //     type: 'highlight',
+        //     doc: {
+        //         code: code.sliceString(from, to),
+        //         from,
+        //         to
+        //     }
         // })
-    }
-
-    private codeToTokens(code: string, preStateStack?: GrammarState) {
-        return codeToTokens(this.highlighter, code, this.options as CodeToTokensOptions)
-    }
-
-    /**
-    * add highlighting to text
-    *
-    * @param doc content text
-    * @param from text start
-    * @param to text end
-    * @returns `{ decorations }` an object that contains decorative information
-    */
-    highlight(doc: Text, from: number, to: number, buildDeco: (from: number, to: number, mark: Decoration) => void, preState?: GrammarState) {
-        const { lang, themes, cssVariablePrefix, defaultColor, tokenizeMaxLineLength, tokenizeTimeLimit } = this.options
-
-        const content = doc.sliceString(from, to);
-        const { tokens, fg = '', bg = '', rootStyle = '' } = this.codeToTokens(content, preState)
+        const { tokens, fg = '', bg = '', rootStyle = '' } = data!
         let pos = from;
 
         // this.themeCache.get
@@ -256,8 +152,8 @@ export class ShikiHighlighter {
                     Decoration.mark({
                         tagName: 'span',
                         attributes: {
-                            [this.isCmStyle ? 'class' : 'style']:
-                                this.isCmStyle ? cmClasses[style] : style,
+                            [isCmStyle ? 'class' : 'style']:
+                                isCmStyle ? cmClasses[style] : style,
                         },
                     })
                 )
@@ -266,21 +162,29 @@ export class ShikiHighlighter {
             pos++; // 为换行符增加位置
         })
 
-        if (this.isCmStyle) {
-            Object.entries(cmClasses).forEach(([k, v]) => {
-                mountStyles(this.view!, {
-                    [`& .cm-line .${v}`]: toStyleObject(k)
-                })
-            })
-        }
+        handleStyles({ classes: cmClasses })
     }
 
-    // TODO some option cannot be updated
-    update(options: CmSkUpdateOptions) {
-        this.options = {
-            ...this.options,
-            ...options
-        }
+    highlight(
+        code: HighlightParams['code'],
+        postActions: HighlightParams['postActions']
+    ): Promise<any> {
+        code.text = (code.text as Text).sliceString(code.from, code.to)
+        return new Promise((resolve: (value: ResultData) => void) => {
+            const id = this.currentId++;
+            this.queue.push({ id, resolve });
+            this.shikiWorker.post({ code: { id, ...code } });
+        }).then((res) => {
+            // after get tokensResult
+            return this.handleTokens(res.tokensResult, code.from, code.to, postActions)
+        })
     }
 
+    private handleMessage(data: ResultData) {
+        const queueItem = this.queue.find(item => item.id === data.id);
+        if (queueItem) {
+            queueItem.resolve(data);
+            this.queue.splice(this.queue.indexOf(queueItem), 1);
+        }
+    }
 }

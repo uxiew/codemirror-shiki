@@ -1,4 +1,7 @@
-import { TokenizeWithThemeOptions } from '@shikijs/core'
+import type { Text } from '@codemirror/state'
+import type {
+    Decoration
+} from '@codemirror/view'
 import type {
     BundledLanguage, BundledTheme,
     CodeOptionsMultipleThemes,
@@ -7,8 +10,14 @@ import type {
     ShikiInternal,
     SpecialTheme,
     SpecialLanguage,
-    LanguageInput
+    LanguageInput,
+    TokensResult,
+    TokenizeWithThemeOptions
 } from './shiki.types'
+import type {
+    CreateThemeOptions,
+    ThemeSettings
+} from '@cmshiki/utils'
 
 export interface ExtraOptions extends CodeOptionsMultipleThemes, TokenizeWithThemeOptions {
     /** 
@@ -76,4 +85,53 @@ type UnknownOptions = 'langAlias'
     | 'grammarState'
     | 'grammarContextCode'
 
+
+export interface CMTheme extends CreateThemeOptions {
+    theme: string;
+    settings: ThemeSettings;
+    classes: {
+        "& .cm-line span": {
+            color: string;
+            fontStyle: string;
+            fontWeight: string;
+            textDecoration: string;
+        };
+    };
+}
+
 export type ShikiToCMOptions = Required<Omit<Options, 'theme' | UnknownOptions>> & Pick<Options, UnknownOptions>
+
+// --------- Worker TYPE  -----
+export type Code = {
+    id?: number,
+    text: Text | string,
+    from: number
+    to: number
+}
+
+export interface MessageEventData extends MessageEvent {
+    data: {
+        type: "init" | 'update' | 'highlight'
+        options?: ShikiToCMOptions
+        code?: Code,
+        theme?: string
+    }
+}
+
+export interface ResultData extends Omit<Code, 'text'> {
+    type: string | MessageEventData['data']['type']
+    data?: {
+        registeredIds: Record<string, string>
+        allThemes: CMTheme[]
+    }
+    tokensResult?: TokensResult
+}
+
+export interface HighlightParams {
+    code: Code,
+    postActions: {
+        handleStyles: (params: { classes: Record<string, string> }) => void
+        buildDeco: (from: number, to: number, mark: Decoration) => void
+    }
+}
+

@@ -3,21 +3,24 @@ import {
     getTokenStyleObject,
     resolveColorReplacements, splitLines,
     stringifyTokenStyle,
-    type ThemedTokenWithVariants,
-    type ThemedToken,
     GrammarState,
     isPlainLang,
     isNoneTheme,
     ShikiError,
     tokenizeWithTheme,
+    createShikiInternal,
+    type ThemedTokenWithVariants,
+    type ThemedToken,
+    type LanguageInput,
+    type ThemeInput,
 } from "@shikijs/core"
 import { StackElementMetadata, StateStack } from "@shikijs/core/textmate"
-import {
-    type BaseOptions,
-    type CmSHOptions,
-    type Highlighter,
+import type {
+    ShikiToCMOptions,
+    BaseOptions,
+    CmSHOptions,
+    Highlighter,
 } from "./types/types"
-
 
 interface Options {
     theme: any

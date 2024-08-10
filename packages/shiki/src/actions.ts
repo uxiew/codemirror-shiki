@@ -1,5 +1,4 @@
-import { type ShikiHighlighter } from "./highlighter";
-import { updateGenerateOptions } from "./viewPlugin";
+import { updateOptionsEffect } from "./viewPlugin";
 import {
     type CmSkUpdateOptions,
     type ThemeOptions
@@ -8,7 +7,7 @@ import {
 /**
  * `getShikiHi` only be resolved after the editor's extensions registered
  */
-export default function useActions(getShikiHi: () => Promise<ShikiHighlighter>) {
+export default function useActions(getShikiHi: () => Promise<any>) {
 
     return {
         /**
@@ -24,7 +23,7 @@ export default function useActions(getShikiHi: () => Promise<ShikiHighlighter>) 
                 return this.setTheme({ theme: options.theme })
             }
             shikiHi.view!.dispatch({
-                effects: updateGenerateOptions.of(options)
+                effects: updateOptionsEffect.of(options)
             });
         },
         /** 

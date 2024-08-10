@@ -111,16 +111,16 @@ async function run() {
     doc: props.lang.value,
     parent: editorView.value,
     extensions: [
+      shiki,
       minimalSetup,
       keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
       highlightSpecialChars(),
       drawSelection(),
       lineNumbers(),
-      highlightActiveLine(),
+      highlightActiveLine()
       // javascript({
       //   typescript: true
       // })
-      shiki
       // shikiWidgetPlugin(highlighter)
       // shiki,
       // solarizedDark,
