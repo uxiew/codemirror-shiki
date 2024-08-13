@@ -62,13 +62,6 @@ export interface ThemeSettings {
 export const createTheme = ({ theme, settings = {}, classes }: CreateThemeOptions): Extension => {
     let themeOptions: Record<string, StyleSpec> = {
         '.cm-gutters': {},
-        // fix 
-        '& .cm-content': {
-            padding: '0 4px 0 6px',
-            '& .cm-line': {
-                padding: 0
-            }
-        }
     };
     const baseStyle: StyleSpec = {};
     if (settings.background) {
