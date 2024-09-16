@@ -1,10 +1,3 @@
-import {
-    type ThemeInput,
-    LanguageInput,
-    createShikiInternal,
-    getSingletonHighlighterCore
-} from "@shikijs/core";
-import wasmInlined from "@shikijs/core/wasm-inlined";
 import type {
     Options,
     ShikiToCMOptions,
@@ -14,28 +7,10 @@ import {
 } from "./plugin";
 import defaultOptions from "./config";
 
-export { type ShikiPluginActions } from "./plugin";
-export { shikiViewPlugin } from "./viewPlugin";
-
-
-function getShikiInternal(options: ShikiToCMOptions) {
-    const themes: ThemeInput[] = Object.values(options.themes).map((theme) => import(
-        `../node_modules/tm-themes/themes/${theme}.json`
-    ).then((m) => m.default))
-
-    const langs: LanguageInput[] = [import(
-        `../node_modules/tm-grammars/grammars/${options.lang}.json`)
-        .then((m) => m.default)]
-
-    return createShikiInternal({
-        langs,
-        themes,
-        langAlias: options.langAlias,
-        warnings: options.warnings,
-        loadWasm: wasmInlined
-    })
-}
-
+export * from "./types/types";
+export { shikiViewPlugin, updateEffect } from "./viewPlugin";
+export { getShikiInternal, themeCompartment, configsFacet } from "./base";
+import { getShikiInternal } from "./base";
 /**
  * integrate the Shiki highlighter to CodeMirror
  * @param { Highlighter } highlighter Shiki Highlighter instance
@@ -58,7 +33,7 @@ export async function shikiToCodeMirror(shikiOptions: Options) {
         ...shikiOptions
     } as ShikiToCMOptions
 
-    const shikiMiniCore = await getShikiInternal(options)
+    const shikiInternalCore = await getShikiInternal(options)
 
-    return shikiPlugin(shikiMiniCore, options)
+    return shikiPlugin(shikiInternalCore, options)
 }

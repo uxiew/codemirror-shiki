@@ -6,7 +6,7 @@
     "moduleResolution": "Bundler",
     "forceConsistentCasingInFileNames": true,
     "paths": {
-      "@cmshiki/core": ["./packages/shiki/src/index.ts"],
+      "@cmshiki/shiki": ["./packages/shiki/src/index.ts"],
       "@cmshiki/utils": ["./packages/utils/src/index.ts"],
       "@cmshiki/editor": ["./packages/editor/src/index.ts"]
     },

@@ -7,7 +7,7 @@ ShikiEditor is a code editor. It's based on codemirror and shiki. If you're look
 ## Usage
 
 ```ts
-import { editor } from '@cmshiki/editor';
+import { ShikiEditor } from '@cmshiki/editor';
 
 const editor = new ShikiEditor({
   doc: 'console.log("Hello, world!");'

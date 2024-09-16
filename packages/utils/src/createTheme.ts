@@ -1,6 +1,5 @@
 import { EditorView } from '@codemirror/view';
 import { Extension } from '@codemirror/state';
-// import { HighlightStyle, type TagStyle, syntaxHighlighting } from '@codemirror/language';
 import { type StyleSpec } from 'style-mod';
 
 interface Nothing {
@@ -12,13 +11,11 @@ interface Nothing {
  */
 type StringLiteralUnion<T extends U, U = string> = T | (U & Nothing);
 
-type Theme = 'light' | 'dark';
-
 export interface CreateThemeOptions {
     /**
      * Theme inheritance. Determines which styles CodeMirror will apply by default.
      */
-    theme: StringLiteralUnion<Theme>;
+    theme: 'light' | 'dark';
     /**
      * Settings to customize the look of the editor, like background, gutter, selection and others.
      */
@@ -59,7 +56,13 @@ export interface ThemeSettings {
     fontSize?: StyleSpec['fontSize'];
 }
 
-export const createTheme = ({ theme, settings = {}, classes }: CreateThemeOptions): Extension => {
+export const createTheme = ({ theme, settings, classes }: CreateThemeOptions): Extension => {
+    settings = {
+        // default settings
+        caret: '#FFFFFF',
+        selection: 'transparent',
+        ...settings,
+    }
     let themeOptions: Record<string, StyleSpec> = {
         '.cm-gutters': {},
     };
@@ -145,10 +148,9 @@ export const createTheme = ({ theme, settings = {}, classes }: CreateThemeOption
         }
     }
 
-    return EditorView.theme(themeOptions,
-        theme.includes('light|dark') ? {
-            dark: theme === 'dark',
-        } : undefined);
+    return EditorView.theme(themeOptions, {
+        dark: theme === 'dark',
+    });
 };
 
 export default createTheme;

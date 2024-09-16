@@ -2,7 +2,6 @@ import { type ShikiHighlighter } from "./highlighter";
 import { updateGenerateOptions } from "./viewPlugin";
 import {
     type CmSkUpdateOptions,
-    type ThemeOptions
 } from "./types/types";
 
 /**
@@ -32,7 +31,7 @@ export default function useActions(getShikiHi: () => Promise<ShikiHighlighter>) 
         * 
         * @param options
         */
-        async setTheme(options: ThemeOptions) {
+        async setTheme(options) {
             const shikiHi = await getShikiHi()
             shikiHi.setTheme(options);
         },

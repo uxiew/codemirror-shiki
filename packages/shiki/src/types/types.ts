@@ -25,17 +25,8 @@ export interface BaseOptions {
      * @example 'javascript'
      */
     lang: (LanguageInput | StringLiteralUnion<BundledLanguage> | SpecialLanguage),
-    theme: (SpecialTheme | StringLiteralUnion<BundledTheme> | ThemeRegistrationAny)
-}
-
-export type CmSkUpdateOptions = Partial<Options & { theme: StringLiteralUnion<'light' | 'dark'> }>
-
-export type ThemeOptions = {
-    /**
-     * The theme name defined in the options's themes.
-    *
-    */
-    theme: BaseOptions['theme']
+    // theme: (SpecialTheme | StringLiteralUnion<BundledTheme> | ThemeRegistrationAny)
+    theme: StringLiteralUnion<BundledTheme>
 }
 
 export type Highlighter = ShikiInternal<never, never>
@@ -58,7 +49,7 @@ export interface Options extends Partial<BaseOptions & ExtraOptions> {
      * }
      * ```
      */
-    themes?: Partial<Record<string, BaseOptions['theme']>>
+    themes?: Record<string, BaseOptions['theme']>
     /**
     * Alias of languages
     * @example { 'my-lang': 'javascript' }

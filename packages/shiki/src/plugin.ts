@@ -2,24 +2,23 @@
 import {
   shikiViewPlugin,
 } from "./viewPlugin"
-import { ShikiHighlighter } from "./highlighter"
 import type {
   Highlighter,
   ShikiToCMOptions,
 } from './types/types'
-import useActions from "./actions";
+import { Base, themeCompartment } from "./base"
 
-// export type ThemeOptions = { bg: string, fg: string, rootStyle?: string }
-export type ShikiPluginActions = Awaited<ReturnType<typeof shikiPlugin>>["actions"]
+export const shikiPlugin = async (coreHighlighter: Highlighter, ctOptions: ShikiToCMOptions) => {
 
-export const shikiPlugin = async (highlighter: Highlighter, ctOptions: ShikiToCMOptions) => {
-
-  const { getShikiHighlighter, viewPlugin } = shikiViewPlugin(highlighter, ctOptions)
+  const { viewPlugin } = shikiViewPlugin(coreHighlighter, ctOptions)
 
   return {
-    actions: useActions(getShikiHighlighter),
+    /**
+     * get theme
+     */
+    getTheme: Base.init(coreHighlighter, ctOptions).getTheme,
     shiki: [
-      ShikiHighlighter.init(highlighter, ctOptions).of(),
+      themeCompartment.of(Base.init(coreHighlighter, ctOptions).initTheme()),
       viewPlugin,
     ]
   }

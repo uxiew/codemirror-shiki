@@ -4,11 +4,8 @@
     :grammar="grammar"
     @changeLang="changeLang"
     @changeTheme="changeTheme"
-  >
-    <template #codemirror>
-      <CodeMirror v-bind="cmProps" />
-    </template>
-  </Shiki>
+  />
+  <CodeMirror h-100vh w-full grid="~ rows-[max-content_1fr]" v-bind="cmProps" />
 </template>
 
 <script setup lang="ts">

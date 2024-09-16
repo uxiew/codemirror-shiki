@@ -1,64 +1,42 @@
 
-import { EditorView, ViewUpdate, ViewPlugin, DecorationSet, Decoration } from "@codemirror/view"
-import { EditorState, StateEffect, Extension } from "@codemirror/state"
 import {
-    createShikiInternal,
-    type HighlighterCoreOptions
-} from 'shiki/core';
-import getWasm from 'shiki/wasm';
-import type { ShikiToCMOptions } from "../../shiki/src/types/types";
-
-const updateSyntax = StateEffect.define<string>()
-const updateTheme = StateEffect.define<string>()
+    EditorView,
+} from "@codemirror/view"
+import { type Options, shikiToCodeMirror, updateEffect } from '@cmshiki/shiki';
+import type { ShikiEditorOptions } from "./types";
+import { partitionOptions } from "./utils";
 
 export class ShikiEditor {
-    private view: EditorView
-    private highlightPlugin: ViewPlugin<{ decorations: DecorationSet }>
+    private view!: EditorView
 
-
-
-    async loadShiki(options: Omit<HighlighterCoreOptions, 'loadWasm'>) {
-        const highlighter = await createShikiInternal({ ...options, loadWasm: getWasm })
-    }
-
-    constructor(parent: HTMLElement, initialCode: string = '', options: any) {
-
-        this.view = new EditorView({
-            state: EditorState.create({
-                doc: initialCode,
-                extensions: [this.highlightPlugin]
+    private async registerInternals(options: ShikiEditorOptions) {
+        const { shiki } = await shikiToCodeMirror(options)
+        return [
+            EditorView.updateListener.of((u) => {
+                if (u.docChanged) {
+                    options.onViewUpdate?.(u)
+                }
             }),
-            parent: parent,
-            extensions: []
+            shiki
+        ]
+    }
+
+    constructor(options: ShikiEditorOptions) {
+        const { shikiOptions, CodeMirrorOptions: cmOptions } = partitionOptions(options)
+        this.registerInternals(shikiOptions).then((extensions) => {
+            this.view = new EditorView({
+                ...cmOptions,
+                extensions: Array.isArray(cmOptions.extensions) ?
+                    cmOptions.extensions.concat([extensions]) :
+                    cmOptions.extensions ?? extensions,
+            })
         })
     }
 
-    async init(options: ShikiToCMOptions) {
-        const highlighter = await createShikiInternal({
-            theme: this.currentTheme,
-            langs: [this.currentLang],
-            loadWasm: getWasm
-        })
-
-        return shikiToCodeMirror(highlighter, options)
-    }
-
-    private async createHighlightPlugin(options: CmSkOptions) {
-
-
-        return shikiToCodeMirror(highlighter, options)
-    }
-
-    updateSyntax(newLang: string) {
+    update(options: Options) {
         this.view.dispatch({
-            effects: updateSyntax.of(newLang)
-        })
-    }
-
-    updateTheme(newTheme: string) {
-        this.view.dispatch({
-            effects: updateTheme.of(newTheme)
-        })
+            effects: updateEffect.of(options)
+        });
     }
 
     getValue(): string {

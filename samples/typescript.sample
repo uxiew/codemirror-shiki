@@ -6,6 +6,9 @@ enum LogLevel {
 }
 
 /**
+*/
+
+/**
  * This is equivalent to:
  * type LogLevelStrings = 'ERROR' | 'WARN' | 'INFO' | 'DEBUG';
  */

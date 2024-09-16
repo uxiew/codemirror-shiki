@@ -13,10 +13,16 @@
     "shiki-editor",
     "codemirror-shiki-editor"
   ],
+  "scripts": {
+    "test": "vitest",
+    "dev": "unbuild --stub",
+    "build": "unbuild",
+    "prepublishOnly": "nr build"
+  },
   "dependencies": {
     "@cmshiki/shiki": "workspace:^",
     "@codemirror/state": "^6.4.1",
-    "@codemirror/view": "^6.28.4",
-    "shiki": "^1.10.3"
+    "@codemirror/view": "^6.32.0",
+    "shiki": "^1.14.1"
   }
 }

@@ -2,7 +2,7 @@
 import type { HighlighterCore } from 'shiki/core';
 import { createHighlighterCore } from 'shiki';
 import { themes } from 'tm-themes';
-import { grammars } from 'tm-grammars';
+import { grammars, injections } from 'tm-grammars';
 
 const isDark = useDark();
 
@@ -83,13 +83,17 @@ async function run(fetchInput = true) {
 
     async function loadLangs(lang: string) {
       if (langs.has(lang)) return langs.get(lang);
-      const info = grammars.find((g) => g.name === lang);
+      const info =
+        grammars.find((g) => g.name === lang) ||
+        injections.find((g) => g.name === lang);
+
       langs.set(
         lang,
-        await import(`../node_modules/tm-grammars/grammars/${lang}.json`).then(
+        import(`../node_modules/tm-grammars/grammars/${lang}.json`).then(
           (m) => m.default
         )
       );
+
       info?.embedded?.forEach(loadLangs);
       return langs.get(lang);
     }
@@ -119,18 +123,18 @@ async function run(fetchInput = true) {
 
 function highlight() {
   if (highlighter) {
-    const result = highlighter.codeToHtml(input.value, {
-      lang: grammar.value,
-      theme: theme.value
-    });
-    output.value = result;
-
     emit('changeLang', {
       name: grammar.value,
       value: input.value,
       grammar: langGrammar.value
     });
     emit('changeTheme', { name: theme.value, value: themeData.value });
+
+    const result = highlighter.codeToHtml(input.value, {
+      lang: grammar.value,
+      theme: theme.value
+    });
+    output.value = result;
   }
 }
 
@@ -221,7 +225,7 @@ if (import.meta.hot) {
 </script>
 
 <template>
-  <div h-100vh w-full grid="~ rows-[max-content_1fr]">
+  <div w-full grid="~ rows-[max-content_1fr]">
     <div flex="~ items-center gap-2" px4 pt-4>
       <a
         href="https://github.com/shikijs/textmate-grammars-themes"
@@ -288,7 +292,7 @@ if (import.meta.hot) {
           />
           <div i-carbon-search absolute left-2 top-2 op40 z--1 />
         </div>
-        <div h-full of-auto flex="~ col" border="~ base rounded">
+        <div h-400px of-auto flex="~ col" border="~ base rounded">
           <button
             v-for="g of filteredGrammars"
             :key="g.name"
@@ -321,7 +325,7 @@ if (import.meta.hot) {
           />
           <div i-carbon-search absolute left-2 top-2 op40 z--1 />
         </div>
-        <div h-full of-auto flex="~ col" border="~ base rounded">
+        <div h-400px of-auto flex="~ col" border="~ base rounded">
           <button
             v-for="t of filteredThemes"
             :key="t.name"
@@ -428,7 +432,6 @@ if (import.meta.hot) {
             spellcheck="false"
           />
         </div>
-        <slot name="codemirror" />
       </div>
     </div>
   </div>

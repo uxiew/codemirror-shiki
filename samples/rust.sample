@@ -29,6 +29,28 @@ impl Stream for Input {
     }
 }
 
+// Either send my name into the channel or receive someone else's, whatever happens first.
+fn seek<'a>(name: &'a str, tx: &Sender<&'a str>, rx: &Receiver<&'a str>) {
+    select_loop! {
+        recv(rx, peer) => println!("{} received a message from {}.", name, peer),
+        send(tx, name) => {}, // Wait for someone to receive my message.
+    }
+}
+
+fn seek<'a>(name: &'a str, tx: &Sender<&'a str>, rx: &Receiver<&'a str>) {
+    select_loop! {
+        recv(rx, peer) => println!("{} received a message from {}.", name, peer),
+        send(tx, name) => {}, // Wait for someone to receive my message.
+    }
+}
+
+fn seek<'a>(name: &'a str, tx: &Sender<&'a str>, rx: &Receiver<&'a str>) {
+    select_loop! {
+        recv(rx, peer) => println!("{} received a message from {}.", name, peer),
+        send(tx, name) => {}, // Wait for someone to receive my message.
+    }
+}
+
 fn main() {
     let stdin = tokio_fs::stdin();
 
@@ -46,6 +68,30 @@ fn main() {
 fn main() {
     // We can use this function here, and define it somewhere later
     fizzbuzz_to(100);
+}
+
+// Function that returns a boolean value
+fn is_divisible_by(lhs: u32, rhs: u32) -> bool {
+    // Corner case, early return
+    if rhs == 0 {
+        return false;
+    }
+
+    // This is an expression, the `return` keyword is not necessary here
+    lhs % rhs == 0
+}
+
+// Functions that "don't" return a value, actually return the unit type `()`
+fn fizzbuzz(n: u32) -> () {
+    if is_divisible_by(n, 15) {
+        println!("fizzbuzz");
+    } else if is_divisible_by(n, 3) {
+        println!("fizz");
+    } else if is_divisible_by(n, 5) {
+        println!("buzz");
+    } else {
+        println!("{}", n);
+    }
 }
 
 // Function that returns a boolean value

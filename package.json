@@ -3,6 +3,7 @@
   "private": "true",
   "author": "uxiew",
   "license": "MIT",
+  "packageManager":"pnpm@9.0.6",
   "bugs": {
     "url": "https://github.com/uxiew/codemirror-shiki/issues"
   },
@@ -16,6 +17,7 @@
     "dev:p": "pnpm -F playground dev",
     "build:doc": "pnpm -F playground build",
     "build": "pnpm -r build",
+    "release": "pnpm test && pnpm build && changelogen --release --publish && git push --follow-tags",
     "publish": "pnpm -r publish --  --access public"
   },
   "devDependencies": {
