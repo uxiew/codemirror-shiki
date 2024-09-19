@@ -5,7 +5,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { createEditor } from '../../packages/editor/dist/simple';
+import { createEditor } from '../../packages/editor/src/simple';
 
 const editor = ref<HTMLDivElement>();
 const editor1 = ref<HTMLDivElement>();

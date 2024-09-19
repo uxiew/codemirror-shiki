@@ -24,7 +24,7 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: '9.0.6'
+          version: '9.10.0'
         env:
           PNPM_HOME: ~/.pnpm
           PNPM_CACHE_FOLDER: ~/.pnpm-store
