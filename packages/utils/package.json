@@ -1,6 +1,6 @@
 {
   "name": "@cmshiki/utils",
-  "version": "0.1.1",
+  "version": "0.1.0",
   "description": "Utilities for CodeMirror",
   "license": "MIT",
   "files": [
@@ -26,7 +26,8 @@
   "scripts": {
     "test": "vitest",
     "dev": "unbuild --stub",
-    "build": "unbuild"
+    "build": "unbuild",
+    "prepublishOnly": "nr build"
   },
   "dependencies": {
     "@codemirror/language": "^6.10.2",

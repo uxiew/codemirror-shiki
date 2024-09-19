@@ -5,5 +5,5 @@
     "module": "esnext",
     "moduleResolution": "Bundler"
   },
-  "include": ["./src"]
+  "include": ["./src/**/*.ts"]
 }

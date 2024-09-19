@@ -5,10 +5,14 @@
     @changeLang="changeLang"
     @changeTheme="changeTheme"
   />
+  <h1 style="padding: 10px">CodeMirror Editor</h1>
   <CodeMirror h-100vh w-full grid="~ rows-[max-content_1fr]" v-bind="cmProps" />
+  <h1 style="padding: 10px">CodeJar Editor</h1>
+  <JarEditor h-100vh w-full grid="~ rows-[max-content_1fr]" v-bind="cmProps" />
 </template>
 
 <script setup lang="ts">
+import JarEditor from './Editor.vue';
 import CodeMirror from './CodeMirror.vue';
 import Shiki from './Shiki.vue';
 

@@ -1,6 +1,6 @@
 {
   "name": "@cmshiki/shiki",
-  "version": "0.1.1",
+  "version": "0.1.0",
   "description": "use shiki to highlight code in CodeMirror",
   "license": "MIT",
   "keywords": [
@@ -46,8 +46,8 @@
   "dependencies": {
     "@cmshiki/utils": "workspace:^",
     "@codemirror/state": "^6.4.1",
-    "@shikijs/core": "^1.12.1",
-    "shiki": "^1.13.0",
+    "@shikijs/core": "^1.17.7",
+    "shiki": "^1.17.7",
     "tm-grammars": "^1.17.1",
     "tm-themes": "^1.7.0"
   }

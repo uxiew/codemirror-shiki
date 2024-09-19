@@ -1,11 +1,9 @@
 {
   "name": "@cmshiki/editor",
-  "version": "0.1.1",
+  "version": "0.1.0",
   "description": "CodeMirror editor with Shiki syntax highlighting",
   "files": [
-    "README.md",
-    "dist",
-    "package.json"
+    "dist"
   ],
   "keywords": [
     "codemirror",
@@ -13,6 +11,16 @@
     "shiki-editor",
     "codemirror-shiki-editor"
   ],
+  "exports": {
+    ".": {
+      "default": "./dist/index.mjs",
+      "types": "./dist/index.d.ts"
+    },
+    "./simple": {
+      "types": "./dist/simple.d.mts",
+      "default": "./dist/simple.mjs"
+    }
+  },
   "scripts": {
     "test": "vitest",
     "dev": "unbuild --stub",
@@ -23,6 +31,8 @@
     "@cmshiki/shiki": "workspace:^",
     "@codemirror/state": "^6.4.1",
     "@codemirror/view": "^6.32.0",
-    "shiki": "^1.14.1"
+    "codejar": "^4.2.0",
+    "codejar-linenumbers": "^1.0.1",
+    "shiki": "^1.17.7"
   }
 }
