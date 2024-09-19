@@ -14,11 +14,11 @@
   },
   "scripts": {
     "test": "vitest",
+    "release": "bumpp",
     "dev:p": "pnpm -F playground dev",
     "build:doc": "pnpm -F playground build",
     "build": "pnpm -r build",
-    "publish": "pnpm -r publish --access public --no-git-checks",
-    "release": "pnpm test && pnpm build && changelogen --release --publish && git push --follow-tags"
+    "publish": "pnpm -r publish --access public --no-git-checks"
   },
   "devDependencies": {
     "jsdom": "^24.1.0",
@@ -26,5 +26,8 @@
     "typescript": "^5.5.3",
     "unbuild": "^2.0.0",
     "vitest": "^2.0.3"
+  },
+  "dependencies": {
+    "bumpp": "^9.5.2"
   }
 }
