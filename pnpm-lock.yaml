@@ -98,6 +98,9 @@ importers:
 
   playground:
     dependencies:
+      '@cmshiki/shiki':
+        specifier: workspace:^
+        version: link:../packages/shiki
       '@codemirror/commands':
         specifier: ^6.6.0
         version: 6.6.2
@@ -120,7 +123,7 @@ importers:
         specifier: ^6.0.1
         version: 6.0.1(@lezer/common@1.2.1)
       shiki:
-        specifier: ^1.17.7
+        specifier: ^1.18.0
         version: 1.18.0
       tm-grammars:
         specifier: ^1.17.1

@@ -29,6 +29,14 @@ jobs:
           PNPM_HOME: ~/.pnpm
           PNPM_CACHE_FOLDER: ~/.pnpm-store
 
+      - name: Cache node_modules
+        uses: actions/cache@v3
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-node-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
       - name: Install Dependencies
         run: pnpm install
 
