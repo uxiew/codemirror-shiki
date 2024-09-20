@@ -9,7 +9,7 @@ import {
   createEditor,
   type SimpleEditor
 } from '../../packages/editor/src/simple';
-import { type CMProps } from './App.vue';
+import { type CMProps } from './types';
 const props = defineProps<CMProps>();
 
 const editorContainer = ref<HTMLDivElement>();

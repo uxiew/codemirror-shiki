@@ -16,7 +16,7 @@
   "scripts": {
     "test": "vitest",
     "release": "bumpp",
-    "dev:p": "pnpm -F playground dev",
+    "dev": "pnpm -F playground dev",
     "build:doc": "pnpm -F playground build",
     "build": "pnpm -r build",
     "publish": "pnpm -r publish --access public --no-git-checks"

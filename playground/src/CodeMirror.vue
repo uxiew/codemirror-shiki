@@ -26,7 +26,7 @@ import { javascript } from '@codemirror/lang-javascript';
 import { ShikiEditor } from '.././../packages/editor/src';
 
 import { onMounted, ref } from 'vue';
-import { type CMProps } from './App.vue';
+import { type CMProps } from './types';
 
 const props = defineProps<CMProps>();
 

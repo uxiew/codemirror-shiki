@@ -13,7 +13,5 @@ const editor = new ShikiEditor({
   doc: 'console.log("Hello, world!");'
 });
 
-editor.mount('#container');
-
 editor.setValue('console.log("Hello, world!");');
 ```

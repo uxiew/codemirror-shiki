@@ -7,17 +7,21 @@ npm install @cmshiki/shiki
 ## Usage
 
 ```ts
-import { shiki } from '@cmshiki/shiki';
+import { shikiToCodeMirror } from '@cmshiki/shiki';
 
-const editor = new EditorView({
+const { shiki, getTheme } = await shikiToCodeMirror({
+  lang: 'typescript',
+  themes: {
+    light: 'github-light',
+    dark: 'github-dark',
+    dim: 'dracula'
+    // any number of themes
+  },
+  // defaultColor: false,
+  cssVariablePrefix: '--cm-',
   doc: props.lang.value,
   parent: editorView.value,
-  extensions: [
-    shiki({
-      lang: 'typescript',
-      theme: props.theme.value
-    })
-  ]
+  extensions: [shiki()]
 });
 ```
 

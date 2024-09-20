@@ -14,24 +14,13 @@
 </template>
 
 <script setup lang="ts">
+import type { CMProps } from './types';
 import JarEditor from './Editor.vue';
 import CodeMirror from './CodeMirror.vue';
 import Shiki from './Shiki.vue';
 
 const theme = useStorage('tm-theme', 'github-light');
 const grammar = useStorage('tm-grammar', 'typescript');
-
-export interface CMProps {
-  lang: {
-    name: string;
-    value: string;
-    grammar: any;
-  };
-  theme: {
-    name: string;
-    value: string;
-  };
-}
 
 const cmProps = reactive<CMProps>({
   lang: {
