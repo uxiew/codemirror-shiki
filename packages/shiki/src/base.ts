@@ -1,15 +1,9 @@
-import {
-    type ThemeInput,
-    LanguageInput,
-    createShikiInternal,
-} from "@shikijs/core";
-import wasmInlined from "@shikijs/core/wasm-inlined";
-import { grammars, injections } from 'tm-grammars'
 import { EditorView } from "@codemirror/view";
 import { combineConfig, Compartment, Facet, type Extension } from "@codemirror/state";
 import { createTheme, type CreateThemeOptions } from "@cmshiki/utils";
 import type { BaseOptions, Highlighter, Options, ShikiToCMOptions } from "./types/types";
 import type { StringLiteralUnion } from "./types/shiki.types";
+import { initShikiInternal } from "@cmshiki/utils";
 
 export const themeCompartment = new Compartment
 
@@ -20,40 +14,6 @@ export const configsFacet = Facet.define<ShikiToCMOptions, ShikiToCMOptions>({
         themeStyle: (f, s) => s,
     })
 })
-
-
-export function getShikiInternal(options: ShikiToCMOptions) {
-    const langs = new Map<string, LanguageInput>();
-    const themes: ThemeInput[] = Object.values(options.themes).map((theme) => import(
-        `../node_modules/tm-themes/themes/${theme}.json`
-    ).then((m) => m.default))
-
-    function loadLangs(lang: string) {
-        if (langs.has(lang)) return langs.get(lang);
-        const info =
-            grammars.find((g) => g.name === lang) ||
-            injections.find((g) => g.name === lang);
-
-        langs.set(
-            lang,
-            import(`../node_modules/tm-grammars/grammars/${lang}.json`).then(
-                (m) => m.default
-            )
-        );
-        info?.embedded?.forEach(loadLangs);
-        return langs.get(lang);
-    }
-
-    loadLangs(options.lang as string)
-
-    return createShikiInternal({
-        langs: Array.from(langs.values()),
-        themes,
-        langAlias: options.langAlias,
-        warnings: options.warnings,
-        loadWasm: wasmInlined
-    })
-}
 
 export class Base {
     protected themesCache = new Map<ThemeName, Extension>()
@@ -89,6 +49,7 @@ export class Base {
     async update(options: Options, view: EditorView) {
         if (options.theme) {
             options.themes = options.themes || {
+                ...this.configs.themes,
                 light: options.theme,
             }
         }
@@ -104,12 +65,12 @@ export class Base {
 
         // reload shiki core and apply the theme if related options changed
         if ((JSON.stringify(options.themes) !== JSON.stringify(_configs.themes))
+            || (_configs.defaultColor !== options.defaultColor)
             || (_configs.lang !== options.lang)
             || (_configs.langAlias !== options.langAlias)
             || (_configs.warnings !== options.warnings)
         ) {
-            console.log(options.themes);
-            this.shikiCore = await getShikiInternal(this.configs)
+            this.shikiCore = await initShikiInternal(this.configs)
             window.requestAnimationFrame(() => {
                 this.loadThemes()
                 view.dispatch({
@@ -117,7 +78,6 @@ export class Base {
                 })
             })
         }
-
     }
 
     /**
@@ -125,13 +85,13 @@ export class Base {
      *
      * @param {string} name `light\dark\...`
      * @returns {Extension} codemirror theme extension
-     * @throws `Theme not registered!`
+     * @throws `xxxx theme not registered!`
      */
-    getTheme(name: string) {
+    getTheme(name: string = this.currentTheme) {
         if (this.themesCache.get(name)) {
             return this.themesCache.get(name)!
         } else {
-            throw new Error(`${name} theme  is not registered!`)
+            throw new Error(`'${name}' theme is not registered!`)
         }
     }
 
@@ -142,7 +102,7 @@ export class Base {
         let { themes, cssVariablePrefix } = this.configs
         Object.keys(themes).forEach((color) => {
             const name = themes[color]
-            if (!name) throw new Error(`${name} theme is not registered!`);
+            if (!name) throw new Error(`'${name}' theme is not registered!`);
             // internal handled cached
             const { colors, bg, fg, type } = this.shikiCore.getTheme(name)
             const prefix = cssVariablePrefix + color
@@ -182,7 +142,6 @@ export class Base {
                         fontWeight: `var(${prefix}-font-weight) !important`,
                         textDecoration: `var(${prefix}-text-decoration) !important`
                     }
-
                 }
             })
             this.themesCache.set(color, extension)

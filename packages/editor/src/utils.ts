@@ -26,7 +26,7 @@ export function partitionOptions(options: ShikiEditorOptions) {
         'root',
         'scrollTo',
         'doc',
-        'onViewUpdate'
+        'onUpdate'
     ]
 
     function filter<T extends keyof ShikiEditorOptions>(keys: T[]) {

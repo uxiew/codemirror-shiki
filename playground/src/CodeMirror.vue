@@ -1,4 +1,5 @@
 <template>
+  <button @click="changeShikiTheme">更改主题</button>
   <div id="cm-editor" ref="editorView"></div>
 </template>
 
@@ -43,17 +44,14 @@ watch(
         lang: v[1],
         theme: v[2]
       });
-      // editor.value?.view.dispatch({
-      //   effects: updateEffect.of({
-      //     lang: v[1],
-      //     theme: v[2]
-      //   })
-      // });
     }
-
-    console.log(v);
   }
 );
+
+async function changeShikiTheme() {
+  editor.value?.changeTheme('dim');
+  console.log(editor.value?.getValue());
+}
 
 async function run() {
   console.log(props.lang.name, props.theme.name);
@@ -65,13 +63,14 @@ async function run() {
     // theme: {
     //   name: props.theme.name
     // },
-    // themes: {
-    //   light: 'one-dark-pro',
-    //   dark: 'github-dark',
-    //   dim: 'github-light'
-    //   // any number of themes
-    // },
+    themes: {
+      light: props.theme.name,
+      dark: 'github-dark',
+      dim: 'one-dark-pro'
+      // any number of themes
+    },
     cssVariablePrefix: '--cm-',
+    // themeStyle: 'shiki',
     // defaultColor: false
     // // optional customizations
     // defaultColor: 'light'

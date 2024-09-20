@@ -1,13 +1,13 @@
-import { TokenizeWithThemeOptions } from '@shikijs/core'
 import type {
     BundledLanguage, BundledTheme,
     CodeOptionsMultipleThemes,
-    ThemeRegistrationAny,
     StringLiteralUnion,
     ShikiInternal,
-    SpecialTheme,
     SpecialLanguage,
-    LanguageInput
+    LanguageInput,
+    RegexEngine,
+    TokenizeWithThemeOptions,
+    Awaitable,
 } from './shiki.types'
 
 export interface ExtraOptions extends CodeOptionsMultipleThemes, TokenizeWithThemeOptions {
@@ -60,9 +60,11 @@ export interface Options extends Partial<BaseOptions & ExtraOptions> {
      * @default true
      */
     warnings?: boolean
+    engine?: Awaitable<RegexEngine>
 }
 
 type UnknownOptions = 'langAlias'
+    | 'engine'
     | 'colorReplacements'
     | 'grammarState'
     | 'grammarContextCode'

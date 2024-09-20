@@ -6,7 +6,7 @@ export type CodeMirrorConfigKeys = keyof (CMEditorOptions)
 
 export type CMEditorOptions = EditorViewConfig & {
     /** listen view change, doc change, viewport change, other view update */
-    onViewUpdate?: (u: ViewUpdate) => void
+    onUpdate?: (u: ViewUpdate) => void
 }
 
 export type ShikiEditorOptions = CMShikiOptions & CMEditorOptions

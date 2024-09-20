@@ -44,7 +44,6 @@ class ShikiView {
             return
         }
         if (update.viewportChanged) {
-            console.log("viewportChanged");
             this.updateHighlight(update);
             return
         }
@@ -113,16 +112,13 @@ class ShikiView {
     }
 }
 
-export const shikiViewPlugin = (highlighter: Highlighter, options: ShikiToCMOptions) => {
+export const shikiViewPlugin = (shikiHighlighter: ShikiHighlighter, _options: ShikiToCMOptions) => {
 
     return {
-        viewPlugin: ViewPlugin.define((view: EditorView) => {
-            return new ShikiView(new ShikiHighlighter(
-                highlighter,
-                options,
-                view))
-        }, {
-            decorations: v => v.decorations
-        })
+        viewPlugin: ViewPlugin.define((view: EditorView) =>
+            new ShikiView(shikiHighlighter.setView(view))
+            , {
+                decorations: v => v.decorations
+            })
     }
 };

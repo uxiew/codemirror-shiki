@@ -19,9 +19,15 @@ import { toStyleObject } from "./utils"
 import { Base } from "./base"
 
 export class ShikiHighlighter extends Base {
+    view!: EditorView
 
-    constructor(shikiCore: Highlighter, options: ShikiToCMOptions, private view: EditorView) {
+    constructor(shikiCore: Highlighter, options: ShikiToCMOptions) {
         super(shikiCore, options)
+    }
+
+    setView(view: EditorView) {
+        this.view = view
+        return this
     }
 
     // getLastGrammarState(preCode: string) {
@@ -48,6 +54,8 @@ export class ShikiHighlighter extends Base {
         // this.themeCache.get
         let cmClasses: Record<string, string> = {};
 
+        // add lang tag
+        this.view!.dom.classList.toggle('lang-' + this.configs.lang)
         tokens.forEach((lines) => {
             lines.forEach((token) => {
                 let style = (token.htmlStyle || stringifyTokenStyle(getTokenStyleObject(token)))

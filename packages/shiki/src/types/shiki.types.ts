@@ -1,15 +1,18 @@
 // Type definitions from shiki
 
-export {
-    type ShikiInternal,
-    type CodeOptionsMultipleThemes,
-    type CodeToTokensOptions,
-    type ThemeRegistrationAny,
-    type LanguageInput,
-    type SpecialLanguage,
-    type StringLiteralUnion,
-    type SpecialTheme,
-    type CodeToTokensWithThemesOptions,
+export type {
+    Awaitable,
+    ShikiInternal,
+    CodeOptionsMultipleThemes,
+    CodeToTokensOptions,
+    ThemeRegistrationAny,
+    LanguageInput,
+    SpecialLanguage,
+    StringLiteralUnion,
+    SpecialTheme,
+    CodeToTokensWithThemesOptions,
+    RegexEngine,
+    TokenizeWithThemeOptions
 } from "@shikijs/core"
 
 // from `shiki/dist/langs.d.mts`
