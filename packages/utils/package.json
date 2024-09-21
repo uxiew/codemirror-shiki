@@ -10,8 +10,10 @@
   ],
   "keywords": [
     "codemirror",
+    "codemirror-utils",
     "codemirror-plugin"
   ],
+  "sideEffects": false,
   "type": "module",
   "main": "dist/index.cjs",
   "module": "dist/index.mjs",

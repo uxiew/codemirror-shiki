@@ -8,9 +8,12 @@
   "keywords": [
     "codemirror",
     "codemirror-editor",
+    "codejar",
+    "shiki-codejar",
     "shiki-editor",
     "codemirror-shiki-editor"
   ],
+  "sideEffects": false,
   "exports": {
     ".": {
       "default": "./dist/index.mjs",
