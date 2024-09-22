@@ -18,59 +18,79 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
+      - name: Pnpm Install
+        uses: yuanze-dev/pnpm-install-with-cache@v2
         with:
-          version: '9.10.0'
-        env:
-          PNPM_HOME: ~/.pnpm
-          PNPM_CACHE_FOLDER: ~/.pnpm-store
-
-      - name: Cache node_modules
-        uses: actions/cache@v3
-        with:
-          path: ~/.pnpm-store
-          key: ${{ runner.os }}-node-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
-
-      - name: Install dependencies
-        run: pnpm install
+          pnpm-version: '9.10.0'
 
       - name: Build
         run: pnpm build
+
+      - name: Cache play-dist artifacts
+        uses: actions/cache@v4
+        with:
+          path: ./playground/dist
+          key: ${{ runner.os }}-play-${{ hashFiles('./playground/dist/*') }}  # 基于 dist 中文件的哈希生成键
+          restore-keys: |
+            ${{ runner.os }}-play-
 
       - name: Run Test
         run: pnpm test
 
   Deploy:
-    # Deploy to the github-pages environment
-    environment:
-      name: github-pages
-      url: https://uxiew.github.io/codemirror-shiki/
-    # Add a dependency to the build job
-    needs: build
+    needs: build  # 部署工作依赖构建完成
     runs-on: ubuntu-latest
-    name: Deploy
-
     steps:
-      - name: Deploy to GitHub Pages 🚀
-        id: deployment
-        uses: JamesIves/github-pages-deploy-action@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Restore play-dist folder
+        uses: actions/cache@v4
         with:
-          folder: ./playground/dist/ # The folder the action should deploy.
+          path: ./playground/dist
+          key: ${{ runner.os }}-play-${{ hashFiles('./playground/dist/*') }}
+          restore-keys: |
+            ${{ runner.os }}-play-
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4  # 使用 peaceiris 的 actions 来发布到 GitHub Pages
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}  # GitHub 提供的 token
+          publish_branch: gh-pages  # default: gh-pages
+          publish_dir: ./playground/dist             # 部署 dist 文件夹的内容
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
 
   Publish-NPM:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Pnpm Install
+        uses: yuanze-dev/pnpm-install-with-cache@v2
+        with:
+          pnpm-version: '9.10.0'
+
       - run: npx changelogithub
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
 
-      - name: Publish NPM
-        run: pnpm run publish
+      # - name: Set publishing config
+      #   run: pnpm config set '//registry.npmjs.org/:_authToken' "${NODE_AUTH_TOKEN}"
+      #   env:
+      #     NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
+
+      - name: Publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+          echo "@cmshiki:registry=https://registry.npmjs.org/" >> ~/.npmrc
+          pnpm run publish

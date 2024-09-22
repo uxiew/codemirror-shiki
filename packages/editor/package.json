@@ -2,6 +2,13 @@
   "name": "@cmshiki/editor",
   "version": "0.1.0",
   "description": "CodeMirror editor with Shiki syntax highlighting",
+  "author": "uxiew",
+  "homepage": "https://github.com/uxiew/codemirror-shiki#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/uxiew/codemirror-shiki.git",
+    "directory": "packages/editor"
+  },
   "files": [
     "dist"
   ],
@@ -28,7 +35,7 @@
     "test": "vitest",
     "dev": "unbuild --stub",
     "build": "unbuild",
-    "prepublishOnly": "nr build"
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
     "@cmshiki/shiki": "workspace:^",
