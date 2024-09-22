@@ -1,3 +1,40 @@
 packages:
   - playground
   - packages/*
+catalog:
+  "@codemirror/commands": ^6.6.0
+  "@codemirror/lang-javascript": ^6.2.2
+  "@codemirror/lang-rust": ^6.0.1
+  "@codemirror/language": ^6.10.2
+  "@codemirror/state": ^6.4.1
+  "@codemirror/view": ^6.33.0
+  "@iconify-json/carbon": ^1.1.32
+  "@shikijs/core": ^1.18.0
+  "@unocss/eslint-config": ^0.59.4
+  "@unocss/eslint-plugin": ^0.59.4
+  "@unocss/reset": ^0.59.4
+  "@vitejs/plugin-vue": ^5.0.4
+  "@vue-macros/volar": ^0.23.1
+  "@vueuse/core": ^10.9.0
+  bumpp: ^9.5.2
+  codejar: ^4.2.0
+  codejar-linenumbers: ^1.0.1
+  codemirror: ^6.0.1
+  jsdom: ^24.1.0
+  shiki: ^1.18.0
+  style-mod: ^4.1.2
+  tm-grammars: ^1.17.1
+  tm-themes: ^1.7.0
+  tsx: ^4.16.2
+  typescript: ^5.5.3
+  unbuild: ^2.0.0
+  unocss: ^0.59.4
+  unplugin-auto-import: ^0.17.5
+  unplugin-vue-components: ^0.27.0
+  unplugin-vue-macros: ^2.9.1
+  unplugin-vue-router: ^0.8.6
+  vitest: "^2.1.1"
+  vite: ^5.4.6
+  vue: ^3.4.26
+  vue-router: ^4.3.2
+  vue-tsc: ^2.0.16

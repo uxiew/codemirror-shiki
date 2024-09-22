@@ -39,10 +39,10 @@
   },
   "dependencies": {
     "@cmshiki/shiki": "workspace:^",
-    "@codemirror/state": "^6.4.1",
-    "@codemirror/view": "^6.33.0",
-    "codejar": "^4.2.0",
-    "codejar-linenumbers": "^1.0.1",
-    "shiki": "^1.18.0"
+    "@codemirror/state": "catalog:",
+    "@codemirror/view": "catalog:",
+    "codejar": "catalog:",
+    "codejar-linenumbers": "catalog:",
+    "shiki": "catalog:"
   }
 }

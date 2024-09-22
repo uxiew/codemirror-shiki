@@ -10,9 +10,7 @@
     "directory": "packages/utils"
   },
   "files": [
-    "README.md",
-    "dist",
-    "package.json"
+    "dist"
   ],
   "keywords": [
     "codemirror",
@@ -38,12 +36,12 @@
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
-    "@codemirror/language": "^6.10.2",
-    "@codemirror/state": "^6.4.1",
-    "@codemirror/view": "^6.33.0",
-    "@shikijs/core": "^1.18.0",
-    "style-mod": "^4.1.2",
-    "tm-grammars": "^1.17.1",
-    "tm-themes": "^1.7.0"
+    "@codemirror/language": "catalog:",
+    "@codemirror/state": "catalog:",
+    "@codemirror/view": "catalog:",
+    "@shikijs/core": "catalog:",
+    "style-mod": "catalog:",
+    "tm-grammars": "catalog:",
+    "tm-themes": "catalog:"
   }
 }

@@ -20,9 +20,7 @@
     "codemirror-plugin"
   ],
   "files": [
-    "README.md",
-    "dist",
-    "package.json"
+    "dist"
   ],
   "sideEffects": false,
   "type": "module",
@@ -47,10 +45,10 @@
   },
   "dependencies": {
     "@cmshiki/utils": "workspace:^",
-    "@codemirror/state": "^6.4.1",
-    "@shikijs/core": "^1.18.0",
-    "shiki": "^1.18.0",
-    "tm-grammars": "^1.17.1",
-    "tm-themes": "^1.7.0"
+    "@codemirror/state": "catalog:",
+    "@shikijs/core": "catalog:",
+    "shiki": "catalog:",
+    "tm-grammars": "catalog:",
+    "tm-themes": "catalog:"
   }
 }
