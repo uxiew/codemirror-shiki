@@ -34,7 +34,8 @@ import {
 /** update theme options */
 export const updateEffect = StateEffect.define<Partial<Options>>()
 
-class ShikiView {
+// Export for testing purposes
+export class ShikiView {
     decorations: DecorationSet = RangeSet.empty
     lastPos = { // This seems unused, consider removing if confirmed after refactor
         from: 0,
