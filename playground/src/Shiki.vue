@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import type { HighlighterCore } from 'shiki/core';
-import { createHighlighterCore } from 'shiki';
-import { themes } from 'tm-themes';
-import { grammars, injections } from 'tm-grammars';
+import type { HighlighterCore } from "shiki/core";
+import { createHighlighterCore } from "shiki/core";
+import { createOnigurumaEngine } from "shiki/engine/oniguruma";
+import { themes } from "tm-themes";
+import { grammars, injections } from "tm-grammars";
 
 const isDark = useDark();
 
 const emit = defineEmits<{
   changeLang: [{ name: string; value: string; grammar: any }];
   changeTheme: [{ name: string; value: any }];
+  perf: [number];
 }>();
 
 const props = defineProps<{
@@ -25,18 +27,18 @@ const error = ref<any>(null);
 
 const copied = ref(false);
 const clipboard = useClipboard();
-const params = useUrlSearchParams('history');
-const searchInputGrammar = ref('');
-const searchInputTheme = ref('');
-const input = ref('');
-const output = ref('');
-const example = ref('');
+const params = useUrlSearchParams("history");
+const searchInputGrammar = ref("");
+const searchInputTheme = ref("");
+const input = ref("");
+const output = ref("");
+const example = ref("");
 const isFetching = ref(false);
 
 const filteredGrammars = computed(() => {
   const searchTerm = searchInputGrammar.value.trim().toLowerCase();
   return grammars.filter((g) =>
-    g.displayName.toLowerCase().includes(searchTerm)
+    g.displayName.toLowerCase().includes(searchTerm),
   );
 });
 
@@ -52,7 +54,7 @@ if (params.grammar && grammars.some((t) => t.name === params.grammar))
 if (params.code?.length) input.value = params.code as string;
 
 const grammarObject = computed(() =>
-  grammars.find((g) => g.name === grammar.value)
+  grammars.find((g) => g.name === grammar.value),
 );
 const themeObject = computed(() => themes.find((t) => t.name === theme.value));
 
@@ -90,8 +92,8 @@ async function run(fetchInput = true) {
       langs.set(
         lang,
         import(`../node_modules/tm-grammars/grammars/${lang}.json`).then(
-          (m) => m.default
-        )
+          (m) => m.default,
+        ),
       );
 
       info?.embedded?.forEach(loadLangs);
@@ -101,14 +103,14 @@ async function run(fetchInput = true) {
     langGrammar.value = await loadLangs(grammar.value);
 
     embedded.value = Array.from(langs.keys()).filter(
-      (l) => l !== grammar.value
+      (l) => l !== grammar.value,
     );
 
     themeData.value = themeObject;
     highlighter = await createHighlighterCore({
       themes: [themeObject],
       langs: await Promise.all(Array.from(langs.values())),
-      loadWasm: () => import('shiki/wasm')
+      engine: createOnigurumaEngine(() => import("shiki/wasm")),
     });
 
     highlight();
@@ -121,20 +123,28 @@ async function run(fetchInput = true) {
   }
 }
 
+// ... (imports remain)
+// ... (imports remain)
+
+// ... (props and refs remain)
+
 function highlight() {
   if (highlighter) {
-    emit('changeLang', {
+    const start = performance.now();
+    emit("changeLang", {
       name: grammar.value,
       value: input.value,
-      grammar: langGrammar.value
+      grammar: langGrammar.value,
     });
-    emit('changeTheme', { name: theme.value, value: themeData.value });
+    emit("changeTheme", { name: theme.value, value: themeData.value });
 
     const result = highlighter.codeToHtml(input.value, {
       lang: grammar.value,
-      theme: theme.value
+      theme: theme.value,
     });
     output.value = result;
+    const end = performance.now();
+    emit("perf", end - start);
   }
 }
 
@@ -142,12 +152,12 @@ function openFile(filename: string) {
   if (import.meta.hot) {
     fetch(`/__open-in-editor?file=${filename}`);
   } else {
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = new URL(
       filename,
-      'https://github.com/uxiew/codemirror-shiki/tree/main/playground/'
+      "https://github.com/uxiew/codemirror-shiki/tree/main/playground/",
     ).href;
-    a.target = '_blank';
+    a.target = "_blank";
     a.click();
   }
 }
@@ -176,10 +186,10 @@ function share() {
     new URL(
       `?${new URLSearchParams({
         theme: theme.value,
-        grammar: grammar.value
+        grammar: grammar.value,
       })}`,
-      location.href
-    ).href
+      location.href,
+    ).href,
   );
   copied.value = true;
   setTimeout(() => {
@@ -197,7 +207,7 @@ watch(
     // Fetch example when grammar changes, or the first load without params
     run(isFirstTime ? !input.value : grammarChanged);
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 watch(
@@ -207,14 +217,14 @@ watch(
     if (input.value !== example.value) params.code = input.value;
     else delete params.code;
   },
-  { flush: 'post' }
+  { flush: "post" },
 );
 
 useTitle(
   () =>
     `${grammarObject.value?.displayName || grammar.value} - ${
       themeObject.value?.displayName || theme.value
-    } - TextMate Playground`
+    } - TextMate Playground`,
 );
 
 if (import.meta.hot) {
@@ -225,7 +235,7 @@ if (import.meta.hot) {
 </script>
 
 <template>
-  <div w-full grid="~ rows-[max-content_1fr]">
+  <div w-full h-full grid="~ rows-[max-content_1fr]">
     <div flex="~ items-center gap-2" px4 pt-4>
       <a
         href="https://github.com/shikijs/textmate-grammars-themes"
@@ -276,8 +286,8 @@ if (import.meta.hot) {
         <div dark:i-carbon-moon i-carbon-sun />
       </button>
     </div>
-    <div grid="~ cols-[200px_200px_5fr] gap-4" p4 of-hidden>
-      <div h-full of-auto flex="~ col gap-4">
+    <div grid="~ cols-[1fr_1fr_2fr] gap-4" p4 of-hidden h-full>
+      <div h-full of-hidden flex="~ col gap-4">
         <div relative border="~ base rounded">
           <input
             v-model="searchInputGrammar"
@@ -292,7 +302,7 @@ if (import.meta.hot) {
           />
           <div i-carbon-search absolute left-2 top-2 op40 z--1 />
         </div>
-        <div h-400px of-auto flex="~ col" border="~ base rounded">
+        <div flex-auto min-h-0 of-auto flex="~ col" border="~ base rounded">
           <button
             v-for="g of filteredGrammars"
             :key="g.name"
@@ -310,7 +320,7 @@ if (import.meta.hot) {
         </div>
       </div>
 
-      <div h-full of-auto flex="~ col gap-4">
+      <div h-full of-hidden flex="~ col gap-4">
         <div relative border="~ base rounded">
           <input
             v-model="searchInputTheme"
@@ -325,7 +335,7 @@ if (import.meta.hot) {
           />
           <div i-carbon-search absolute left-2 top-2 op40 z--1 />
         </div>
-        <div h-400px of-auto flex="~ col" border="~ base rounded">
+        <div flex-auto min-h-0 of-auto flex="~ col" border="~ base rounded">
           <button
             v-for="t of filteredThemes"
             :key="t.name"
@@ -341,7 +351,7 @@ if (import.meta.hot) {
         </div>
       </div>
 
-      <div flex="~ col gap-4" of-auto>
+      <div flex="~ col gap-4" of-hidden h-full>
         <div
           p4
           border="~ base rounded"
@@ -423,7 +433,7 @@ if (import.meta.hot) {
           <div i-svg-spinners-270-ring-with-bg />
           Loading...
         </div>
-        <div h-300px relative of-x-scroll flex-none>
+        <div flex-auto min-h-0 relative of-auto>
           <div v-html="output" />
           <textarea
             id="input"
@@ -444,7 +454,8 @@ if (import.meta.hot) {
 :root.dark {
   color-scheme: dark;
 }
-.shiki, #input {
+.shiki,
+#input {
   font-size: 14px;
   line-height: 1.5;
   padding: 10px;
@@ -453,6 +464,6 @@ if (import.meta.hot) {
   --uno: border border-base rounded p4;
 }
 .panel-info button {
-  --uno: hover-text-primary hover-underline hover:op100;
+  --uno: hover-text-primary hover-underline hover: op100;
 }
 </style>

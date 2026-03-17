@@ -1,31 +1,116 @@
-# ShikiEditor
+# @cmshiki/editor
 
-ShikiEditor is a code editor. It's based on CodeJar and Shiki. If you're looking for a lightweight code editor with syntax highlighting similar to VS Code, then this one's for you. It relies on `@cmshiki/shiki` for its Shiki integration when used in more complex CodeMirror 6 setups, but the `simple.ts` editor (often wrapped as `ShikiEditor`) provides a direct, lightweight CodeJar-based implementation.
+在 `@cmshiki/shiki` 之上的开箱即用编辑器封装。
 
-## Usage
+## 安装
 
-```ts
-import { ShikiEditor } // Typically refers to the simple editor setup
-  from '@cmshiki/editor'; // Or specific import for the simple editor if distinct
-
-// Example assuming ShikiEditor wraps the simple editor from simple.ts
-const editor = new ShikiEditor({ // Or: await createSimpleEditor(element, options)
-  doc: 'Hello, world!',
-  lang: 'javascript',
-  theme: 'github-light'
-});
-
-editor.setValue('console.log("Hello, world!");');
+```bash
+pnpm add @cmshiki/editor
 ```
 
-## Features
+Peer 依赖：
 
-The `ShikiEditor` (referring to the `simple.ts` CodeJar-based editor) provides a user-friendly coding experience with several key features:
+```bash
+pnpm add @codemirror/state @codemirror/view shiki
+```
 
--   **High-Quality Syntax Highlighting**: Leverages Shiki for accurate and beautiful syntax highlighting, similar to VS Code, across a wide variety of languages.
--   **Themeable**: Supports multiple themes, allowing users to customize the editor's appearance.
--   **Performance Optimizations for Highlighting**:
-    *   **Debounced Updates**: The Shiki-based syntax highlighting (using `codeToHtml`) is debounced with a 250ms delay. This means highlighting doesn't run on every keystroke, only activating after a brief pause in typing, which significantly reduces processing load.
-    *   **Cursor Position Preservation**: During highlighting updates, the editor carefully manages and restores the cursor position using `CodeJar.saveSelection` and `CodeJar.restoreSelection`. This prevents the common issue of the cursor jumping unexpectedly after content is re-highlighted.
-    *   These optimizations lead to a smoother typing experience and improved perceived performance, especially when editing larger code blocks.
--   **Line Numbers**: Includes line number support via `codejar-linenumbers`.
+## 推荐用法
+
+优先使用 `ShikiEditor.create()`，先完成异步高亮初始化，再创建编辑器，避免初始化闪烁。
+
+```ts
+import { ShikiEditor } from "@cmshiki/editor";
+
+const editor = await ShikiEditor.create({
+  parent: document.getElementById("editor")!,
+  doc: "const answer = 42",
+  lang: "typescript",
+  theme: "github-dark",
+  themes: {
+    light: "github-light",
+    dark: "github-dark",
+  },
+  engine: "oniguruma", // or "javascript"
+});
+```
+
+## 兼容用法
+
+```ts
+const editor = new ShikiEditor({
+  parent: document.getElementById("editor")!,
+  doc: "const n = 1",
+  lang: "javascript",
+  theme: "github-light",
+  themes: { light: "github-light", dark: "github-dark" },
+});
+```
+
+构造函数路径会先创建不带高亮的编辑器，再异步注入高亮扩展，因此可能短暂闪烁。
+
+## 常用 API
+
+```ts
+class ShikiEditor {
+  view: EditorView;
+  getTheme: Promise<(name?: string, view?: EditorView) => Extension>;
+
+  static create(options: ShikiEditorOptions): Promise<ShikiEditor>;
+  constructor(options: ShikiEditorOptions);
+
+  changeTheme(name: string): Promise<void>;
+  update(options: Options): void;
+  setOnUpdate(callback: (u: ViewUpdate) => void): void;
+
+  getValue(): string;
+  setValue(newCode: string): void;
+  destroy(): void;
+}
+```
+
+## 示例
+
+### 切换主题
+
+```ts
+await editor.changeTheme("dark");
+```
+
+### 更新语言或引擎
+
+```ts
+editor.update({
+  lang: "tsx",
+  engine: "javascript",
+});
+```
+
+### 监听文档变化
+
+```ts
+editor.setOnUpdate((u) => {
+  if (u.docChanged) {
+    console.log(u.state.doc.toString());
+  }
+});
+```
+
+## 选项说明
+
+`ShikiEditorOptions` = `@cmshiki/shiki` 的 `Options` + CodeMirror `EditorViewConfig` + `onUpdate`。
+
+常用字段：
+
+- `lang`
+- `theme` / `themes`
+- `engine`
+- `highlighter`
+- `themeStyle`
+- `doc`
+- `parent`
+- `extensions`
+- `onUpdate`
+
+## License
+
+MIT

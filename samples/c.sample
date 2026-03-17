@@ -1,0 +1,38 @@
+#include <stdio.h>
+
+#define ARR_LEN 7
+
+void qsort_arr(int v[], int left, int right);
+void print_arr(int v[], int len);
+void swap(int v[], int i, int j);
+
+int main(void) {
+  int v[ARR_LEN] = {4, 3, 1, 7, 9, 6, 2};
+  print_arr(v, ARR_LEN);
+  qsort_arr(v, 0, ARR_LEN - 1);
+  print_arr(v, ARR_LEN);
+  return 0;
+}
+
+void qsort_arr(int v[], int left, int right) {
+  int i, last;
+  if (left >= right) return;
+  swap(v, left, (left + right) / 2);
+  last = left;
+  for (i = left + 1; i <= right; i++)
+    if (v[i] < v[left]) swap(v, ++last, i);
+  swap(v, left, last);
+  qsort_arr(v, left, last - 1);
+  qsort_arr(v, last + 1, right);
+}
+
+void swap(int v[], int i, int j) {
+  int temp = v[i];
+  v[i] = v[j];
+  v[j] = temp;
+}
+
+void print_arr(int v[], int len) {
+  for (int i = 0; i < len; i++) printf("%d ", v[i]);
+  printf("\n");
+}

@@ -14,7 +14,9 @@ export function partitionOptions(options: ShikiEditorOptions) {
         'warnings',
         'tokenizeMaxLineLength',
         'tokenizeTimeLimit',
-        'defaultColor'
+        'defaultColor',
+        'engine',
+        'highlighter'
     ]
     const CodeMirrorKeys: CodeMirrorConfigKeys[] = [
         'extensions',

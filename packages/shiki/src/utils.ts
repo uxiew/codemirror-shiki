@@ -14,19 +14,23 @@ export function convertSpecificStyles(el: HTMLElement, properties: string[]) {
 
 /**
  * get color style string like shiki using multiple themes
+ * @param styleStr - CSS style string like "color:#D73A49;font-style:italic"
+ * @param isBgStyle - whether background style
+ * @param important - whether to add !important suffix
  */
-export function toStyleObject(styleStr: string, isBgStyle: boolean = false) {
+export function toStyleObject(styleStr: string, isBgStyle: boolean = false, important: boolean = false) {
     const Styles: Record<string, string> = {};
+    const suffix = important ? ' !important' : '';
 
     styleStr.split(";").forEach((str, i) => {
         const [k, v] = str.split(":")
         if (k && v) {
-            Styles[k] = v
+            Styles[k] = v + suffix
         } else {
             if (isBgStyle) {
-                Styles["background-color"] = k
+                Styles["background-color"] = k + suffix
             } else {
-                Styles["color"] = k
+                Styles["color"] = k + suffix
             }
         }
     })

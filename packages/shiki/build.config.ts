@@ -14,5 +14,9 @@ export default defineBuildConfig({
     },
   },
   externals: [
+    '@cmshiki/utils',
+    '@codemirror/state',
+    '@codemirror/view',
+    'shiki',
   ],
 })

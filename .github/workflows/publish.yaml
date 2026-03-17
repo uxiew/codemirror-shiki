@@ -1,96 +1,90 @@
-name: Publish
+name: Release
 
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: write
   id-token: write
 
 jobs:
-  build:
+  verify:
+    name: Verify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
+          cache: "pnpm"
 
-      - name: Pnpm Install
-        uses: yuanze-dev/pnpm-install-with-cache@v2
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
         with:
-          pnpm-version: '9.10.0'
+          version: "9.10.0"
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Test
+        run: pnpm test
 
       - name: Build
         run: pnpm build
 
-      - name: Cache play-dist artifacts
-        uses: actions/cache@v4
-        with:
-          path: ./playground/dist
-          key: ${{ runner.os }}-play-${{ hashFiles('./playground/dist/*') }}  # 基于 dist 中文件的哈希生成键
-          restore-keys: |
-            ${{ runner.os }}-play-
-
-      - name: Run Test
-        run: pnpm test
-
-  Deploy:
-    needs: build  # 部署工作依赖构建完成
+  github-release:
+    name: Create GitHub Release
+    needs: verify
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Restore play-dist folder
-        uses: actions/cache@v4
         with:
-          path: ./playground/dist
-          key: ${{ runner.os }}-play-${{ hashFiles('./playground/dist/*') }}
-          restore-keys: |
-            ${{ runner.os }}-play-
-
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4  # 使用 peaceiris 的 actions 来发布到 GitHub Pages
+          fetch-depth: 0
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}  # GitHub 提供的 token
-          publish_branch: gh-pages  # default: gh-pages
-          publish_dir: ./playground/dist             # 部署 dist 文件夹的内容
-          user_name: 'github-actions[bot]'
-          user_email: 'github-actions[bot]@users.noreply.github.com'
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
 
-  Publish-NPM:
-    needs: build
+  publish-npm:
+    name: Publish Packages
+    needs: verify
     runs-on: ubuntu-latest
+    if: ${{ secrets.NPM_TOKEN != '' }}
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Pnpm Install
-        uses: yuanze-dev/pnpm-install-with-cache@v2
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          pnpm-version: '9.10.0'
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+          cache: "pnpm"
 
-      - run: npx changelogithub
-        continue-on-error: true
-        env:
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "9.10.0"
 
-      # - name: Set publishing config
-      #   run: pnpm config set '//registry.npmjs.org/:_authToken' "${NODE_AUTH_TOKEN}"
-      #   env:
-      #     NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
 
       - name: Publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: true
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"
         run: |
-          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
-          echo "@cmshiki:registry=https://registry.npmjs.org/" >> ~/.npmrc
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
+          echo "@cmshiki:registry=https://registry.npmjs.org/" >> "$HOME/.npmrc"
           pnpm run publish

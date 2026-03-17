@@ -1,79 +1,71 @@
 <template>
-  <button @click="changeShikiTheme">更改主题</button>
   <div id="cm-editor" ref="editorView"></div>
 </template>
 
 <script setup lang="ts">
 import {
-  EditorView,
   highlightSpecialChars,
   drawSelection,
   keymap,
   lineNumbers,
-  highlightActiveLine
-} from '@codemirror/view';
-import { minimalSetup } from 'codemirror';
+  highlightActiveLine,
+} from "@codemirror/view";
+import { minimalSetup } from "codemirror";
 
-import { rust } from '@codemirror/lang-rust';
 import {
   defaultKeymap,
   indentWithTab,
-  historyKeymap
-} from '@codemirror/commands';
+  historyKeymap,
+} from "@codemirror/commands";
 
-import { javascript } from '@codemirror/lang-javascript';
+import { ShikiEditor } from "@cmshiki/editor";
 
-import { ShikiEditor } from '.././../packages/editor/src';
-
-import { onMounted, ref } from 'vue';
-import { type CMProps } from './types';
+import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { type CMProps } from "./types";
 
 const props = defineProps<CMProps>();
 
-let editorView = ref<HTMLDivElement>();
-let editor = ref<ShikiEditor>();
+const editorView = ref<HTMLDivElement>();
+const editor = ref<ShikiEditor>();
+
+const emit = defineEmits<{
+  perf: [number];
+}>();
 
 watch(
-  () => [props.lang.value, props.lang.name, props.theme.name],
-  (v, o) => {
+  () => [props.lang.value, props.lang.name, props.theme.name, props.engine],
+  async (v, o) => {
+    if (!editor.value || !o) return;
+
+    const start = performance.now();
     if (v[0] !== o[0]) {
       editor.value?.setValue(v[0]);
     }
-    if (v[1] !== o[1] || v[2] !== o[2]) {
-      editor.value?.update({
-        lang: v[1],
-        theme: v[2]
-      });
+    if (v[1] !== o[1] || v[2] !== o[2] || v[3] !== o[3]) {
+      const payload: Record<string, any> = {};
+      if (v[1] !== o[1]) payload.lang = v[1];
+      if (v[2] !== o[2]) payload.theme = v[2];
+      if (v[3] !== o[3]) payload.engine = v[3];
+      editor.value?.update(payload);
     }
-  }
+    await nextTick();
+    emit("perf", performance.now() - start);
+  },
 );
 
-async function changeShikiTheme() {
-  editor.value?.changeTheme('dim');
-  console.log(editor.value?.getValue());
-}
-
 async function run() {
-  console.log(props.lang.name, props.theme.name);
-
-  // editor.value?.destroy();
+  editor.value?.destroy();
   editor.value = new ShikiEditor({
     lang: props.lang.name,
     theme: props.theme.name,
-    // theme: {
-    //   name: props.theme.name
-    // },
+    engine: props.engine,
+    themeStyle: "cm",
+    defaultColor: "light",
     themes: {
       light: props.theme.name,
-      dark: 'github-dark',
-      dim: 'one-dark-pro'
-      // any number of themes
+      dark: "github-dark",
     },
-    cssVariablePrefix: '--cm-',
-    // themeStyle: 'shiki',
-    // defaultColor: false
-    // // optional customizations
-    // defaultColor: 'light'
+    cssVariablePrefix: "--cm-",
     doc: props.lang.value,
     parent: editorView.value,
     extensions: [
@@ -82,24 +74,17 @@ async function run() {
       highlightSpecialChars(),
       drawSelection(),
       lineNumbers(),
-      highlightActiveLine()
-      // javascript({
-      //   typescript: true
-      // })
-      // shikiWidgetPlugin(highlighter)
-      // shiki,
-      // solarizedDark,
-      // syntaxHighlighting(defaultHighlightStyle)
-      // oneDark,
-      // oneDarkTheme,
-      // syntaxHighlighting(oneDarkHighlightStyle)
-      // rust()
-    ]
+      highlightActiveLine(),
+    ],
   });
 }
 
 onMounted(() => {
   run();
+});
+
+onBeforeUnmount(() => {
+  editor.value?.destroy();
 });
 
 if (import.meta.hot) {
@@ -111,7 +96,10 @@ if (import.meta.hot) {
 
 <style scoped>
 #cm-editor {
-  height: 300px;
-  overflow: auto;
+  height: 100%;
+  overflow: hidden;
+}
+:deep(.cm-editor) {
+  height: 100%;
 }
 </style>

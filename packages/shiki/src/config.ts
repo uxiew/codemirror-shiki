@@ -5,7 +5,7 @@ import type {
 const defaultOptions: Omit<ShikiToCMOptions, 'themes'> = {
     lang: 'text',
     warnings: true,
-    themeStyle: 'cm',
+    themeStyle: 'shiki', // Use inline styles instead of CSS classes
     defaultColor: 'light',
     cssVariablePrefix: '--shiki-',
     tokenizeMaxLineLength: 20000,

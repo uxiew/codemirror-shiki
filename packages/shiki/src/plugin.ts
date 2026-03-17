@@ -31,7 +31,7 @@ export const shikiPlugin = async (highlighter: Highlighter, ctOptions: ShikiToCM
  * @returns { Extension } codemirror theme extension
  * @throws `xxxx theme not registered!`
  */
-    getTheme(name?: string, view?: EditorView) {
+    getTheme(name?: string, view?: any) {
       return view
         ? shikiHighlighter.setView(view).getTheme(name)
         : BaseCore.getTheme(name)

@@ -1,6 +1,6 @@
 {
   "name": "@cmshiki/shiki",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "use shiki to highlight code in CodeMirror",
   "license": "MIT",
   "homepage": "https://github.com/uxiew/codemirror-shiki#readme",
@@ -41,14 +41,17 @@
     "prepublishOnly": "pnpm build"
   },
   "peerDependencies": {
-    "@codemirror/view": "^6.32.0"
+    "@codemirror/state": "^6.0.0",
+    "@codemirror/view": "^6.0.0",
+    "shiki": "^3.0.0"
   },
   "dependencies": {
     "@cmshiki/utils": "workspace:^",
-    "@codemirror/state": "catalog:",
     "@shikijs/core": "catalog:",
-    "shiki": "catalog:",
-    "tm-grammars": "catalog:",
-    "tm-themes": "catalog:"
-  }
+    "@shikijs/vscode-textmate": "catalog:"
+  },
+  "devDependencies": {
+    "shiki": "catalog:"
+  },
+  "optionalDependencies": {}
 }

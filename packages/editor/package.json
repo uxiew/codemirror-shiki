@@ -1,6 +1,6 @@
 {
   "name": "@cmshiki/editor",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "CodeMirror editor with Shiki syntax highlighting",
   "author": "uxiew",
   "homepage": "https://github.com/uxiew/codemirror-shiki#readme",
@@ -23,12 +23,8 @@
   "sideEffects": false,
   "exports": {
     ".": {
-      "default": "./dist/index.mjs",
+      "import": "./dist/index.mjs",
       "types": "./dist/index.d.ts"
-    },
-    "./simple": {
-      "types": "./dist/simple.d.mts",
-      "default": "./dist/simple.mjs"
     }
   },
   "scripts": {
@@ -38,11 +34,13 @@
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
-    "@cmshiki/shiki": "workspace:^",
-    "@codemirror/state": "catalog:",
-    "@codemirror/view": "catalog:",
-    "codejar": "catalog:",
-    "codejar-linenumbers": "catalog:",
-    "shiki": "catalog:"
-  }
+    "@cmshiki/shiki": "workspace:^"
+  },
+  "devDependencies": {},
+  "peerDependencies": {
+    "@codemirror/state": "^6.0.0",
+    "@codemirror/view": "^6.0.0",
+    "shiki": "^3.0.0"
+  },
+  "optionalDependencies": {}
 }

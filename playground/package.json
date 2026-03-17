@@ -18,6 +18,7 @@
     "@codemirror/state": "catalog:",
     "@codemirror/view": "catalog:",
     "@vueuse/core": "catalog:",
+    "@cmshiki/editor": "workspace:^",
     "@cmshiki/shiki": "workspace:^",
     "codemirror": "catalog:",
     "shiki": "catalog:",
@@ -41,5 +42,7 @@
     "vite": "catalog:",
     "vitest": "^1.5.3",
     "vue-tsc": "catalog:"
-  }
+  },
+  "peerDependencies": {},
+  "optionalDependencies": {}
 }

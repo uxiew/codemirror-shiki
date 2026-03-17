@@ -1,6 +1,6 @@
 {
   "name": "@cmshiki/utils",
-  "version": "0.1.0-beta",
+  "version": "0.1.1",
   "description": "Utilities for CodeMirror",
   "license": "MIT",
   "homepage": "https://github.com/uxiew/codemirror-shiki#readme",
@@ -40,8 +40,9 @@
     "@codemirror/state": "catalog:",
     "@codemirror/view": "catalog:",
     "@shikijs/core": "catalog:",
-    "style-mod": "catalog:",
-    "tm-grammars": "catalog:",
-    "tm-themes": "catalog:"
-  }
+    "style-mod": "catalog:"
+  },
+  "devDependencies": {},
+  "peerDependencies": {},
+  "optionalDependencies": {}
 }
