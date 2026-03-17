@@ -6,15 +6,11 @@ export default defineBuildConfig({
     ],
     declaration: true,
     rollup: {
-        emitCJS: false,
-        dts: {
-        },
+        emitCJS: true,
     },
     externals: [
-        '@cmshiki/shiki',
-        '@cmshiki/utils',
-        '@codemirror/state',
         '@codemirror/view',
-        'shiki',
+        '@codemirror/state',
+        'style-mod',
     ],
 })

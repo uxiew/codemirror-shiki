@@ -60,7 +60,7 @@ export const createTheme = ({ theme, settings, classes }: CreateThemeOptions): E
     settings = {
         // default settings
         caret: '#FFFFFF',
-        selection: 'transparent',
+        // Note: selection default is now handled in base.ts with theme-aware colors
         ...settings,
     }
     let themeOptions: Record<string, StyleSpec> = {
@@ -111,29 +111,34 @@ export const createTheme = ({ theme, settings, classes }: CreateThemeOptions): E
         activeLineGutterStyle.color = settings.gutterActiveForeground;
     }
 
+    // Build &.cm-editor styles as a single object to avoid overwriting
+    const cmEditorStyle: StyleSpec = {};
+
     if (settings.lineHighlight) {
-        themeOptions['&.cm-editor'] = {
-            "& .cm-activeLine": {
-                backgroundColor: settings.lineHighlight,
-            }
+        cmEditorStyle["& .cm-activeLine"] = {
+            backgroundColor: settings.lineHighlight,
         };
         activeLineGutterStyle.backgroundColor = settings.lineHighlight;
     }
     themeOptions['.cm-activeLineGutter'] = activeLineGutterStyle;
 
     if (settings.selection) {
-        themeOptions["&.cm-editor"] = {
-            "& .cm-line": {
-                "& ::selection, &::selection": { backgroundColor: settings.selection + ' !important' },
-            },
-            "& .cm-selectionBackground": {
-                backgroundColor: settings.selection + ' !important',
-            },
-            "& .cm-selectionLayer .selectionBackground": {
-                backgroundColor: settings.selection + ' !important',
-            }
-        }
+        cmEditorStyle["& .cm-line"] = {
+            "& ::selection, &::selection": { backgroundColor: settings.selection + ' !important' },
+        };
+        cmEditorStyle["& .cm-selectionBackground"] = {
+            backgroundColor: settings.selection + ' !important',
+        };
+        cmEditorStyle["& .cm-selectionLayer .selectionBackground"] = {
+            backgroundColor: settings.selection + ' !important',
+        };
     }
+
+    // Only add &.cm-editor if there are styles to apply
+    if (Object.keys(cmEditorStyle).length > 0) {
+        themeOptions['&.cm-editor'] = cmEditorStyle;
+    }
+
     if (settings.selectionMatch) {
         themeOptions['& .cm-selectionMatch'] = {
             backgroundColor: settings.selectionMatch,

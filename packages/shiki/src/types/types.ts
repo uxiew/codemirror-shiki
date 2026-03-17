@@ -8,14 +8,16 @@ import type {
     RegexEngine,
     TokenizeWithThemeOptions,
     Awaitable,
+    ThemeInput,
 } from './shiki.types'
 
-export interface ExtraOptions extends CodeOptionsMultipleThemes, TokenizeWithThemeOptions {
+export interface ExtraOptions extends Omit<CodeOptionsMultipleThemes, 'themes'>, TokenizeWithThemeOptions {
     /** 
      * shiki inline style or codemirror class style
      * @default 'cm'
     */
     themeStyle?: 'cm' | 'shiki'
+    themes?: Record<string, BaseOptions['theme']>
 }
 
 export interface BaseOptions {
@@ -26,7 +28,7 @@ export interface BaseOptions {
      */
     lang: (LanguageInput | StringLiteralUnion<BundledLanguage> | SpecialLanguage),
     // theme: (SpecialTheme | StringLiteralUnion<BundledTheme> | ThemeRegistrationAny)
-    theme: StringLiteralUnion<BundledTheme>
+    theme: StringLiteralUnion<BundledTheme> | ThemeInput
 }
 
 export type Highlighter = ShikiInternal<never, never>
@@ -60,7 +62,41 @@ export interface Options extends Partial<BaseOptions & ExtraOptions> {
      * @default true
      */
     warnings?: boolean
-    engine?: Awaitable<RegexEngine>
+    /**
+     * Regex engine to use for tokenization.
+     * - Pass `'javascript'` to use the JavaScript RegExp engine (faster startup, smaller bundle)
+     * - Pass `'oniguruma'` to use the Oniguruma engine via WASM (better compatibility, default)
+     * - Pass a custom RegexEngine for full control
+     * @default 'oniguruma'
+     */
+    engine?: 'javascript' | 'oniguruma' | Awaitable<RegexEngine>
+    /**
+     * Pre-initialized Shiki highlighter instance.
+     * When provided, the internal initialization is skipped, enabling zero-delay editor creation.
+     * 
+     * Use this to:
+     * - Reuse the same highlighter across multiple editors
+     * - Pre-load themes/languages at app startup
+     * - Full control over Shiki configuration
+     * 
+     * @example
+     * ```ts
+     * import { createHighlighterCore } from 'shiki/core'
+     * 
+     * const sharedHighlighter = await createHighlighterCore({
+     *   themes: [import('@shikijs/themes/github-dark')],
+     *   langs: [import('@shikijs/langs/javascript')],
+     *   engine: createJavaScriptRegexEngine()
+     * })
+     * 
+     * // Zero-delay creation
+     * const editor = await ShikiEditor.create({
+     *   highlighter: sharedHighlighter,
+     *   ...
+     * })
+     * ```
+     */
+    highlighter?: Highlighter
 }
 
 type UnknownOptions = 'langAlias'
@@ -68,5 +104,6 @@ type UnknownOptions = 'langAlias'
     | 'colorReplacements'
     | 'grammarState'
     | 'grammarContextCode'
+    | 'highlighter'
 
 export type ShikiToCMOptions = Required<Omit<Options, 'theme' | UnknownOptions>> & Pick<Options, UnknownOptions>

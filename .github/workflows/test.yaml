@@ -2,46 +2,34 @@ name: Test
 
 on:
   push:
-    branches:
-      - main
-
+    branches: ["main"]
   pull_request:
-    branches:
-      - main
+    branches: ["main"]
 
 jobs:
   test:
+    name: CI
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
+          cache: "pnpm"
 
-      - name: Install pnpm
+      - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: '9.10.0'
-        env:
-          PNPM_HOME: ~/.pnpm
-          PNPM_CACHE_FOLDER: ~/.pnpm-store
+          version: "9.10.0"
 
-      - name: Cache node_modules
-        uses: actions/cache@v3
-        with:
-          path: ~/.pnpm-store
-          key: ${{ runner.os }}-node-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
+      - name: Install
+        run: pnpm install --frozen-lockfile
 
-      - name: Install Dependencies
-        run: pnpm install
+      - name: Build
+        run: pnpm build
 
-      - name: Build and cache build artifacts
-        run: pnpm run build
-
-      - name: Run Tests
-        run: pnpm run test
+      - name: Test
+        run: pnpm test

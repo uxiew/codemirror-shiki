@@ -12,7 +12,8 @@ export type {
     SpecialTheme,
     CodeToTokensWithThemesOptions,
     RegexEngine,
-    TokenizeWithThemeOptions
+    TokenizeWithThemeOptions,
+    ThemeInput
 } from "@shikijs/core"
 
 // from `shiki/dist/langs.d.mts`

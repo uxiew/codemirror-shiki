@@ -28,5 +28,6 @@
     "typescript": "catalog:",
     "unbuild": "catalog:",
     "vitest": "catalog:"
-  }
+  },
+  "dependencies": {}
 }

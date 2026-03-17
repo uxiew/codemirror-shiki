@@ -6,9 +6,10 @@ import {
     shikiPlugin,
 } from "./plugin";
 import defaultOptions from "./config";
-import { initShikiInternal } from "@cmshiki/utils";
+import { initShiki } from "./init";
 
 export * from "./types/types";
+export { ShikiHighlighter } from "./highlighter";
 export { updateEffect } from "./viewPlugin";
 export { themeCompartment, configsFacet } from "./base";
 /**
@@ -33,7 +34,7 @@ export async function shikiToCodeMirror(shikiOptions: Options) {
         ...shikiOptions
     } as ShikiToCMOptions
 
-    const shikiInternalCore = await initShikiInternal(options)
+    const shikiInternalCore = await initShiki(options)
 
     return shikiPlugin(shikiInternalCore, options)
 }

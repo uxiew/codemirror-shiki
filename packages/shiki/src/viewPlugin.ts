@@ -21,37 +21,49 @@ import {
 /** update theme options */
 export const updateEffect = StateEffect.define<Partial<Options>>()
 
+// Polyfill for requestIdleCallback
+const requestIdleCallback = (typeof window !== 'undefined' && window.requestIdleCallback)
+    ? window.requestIdleCallback
+    : (cb: () => void) => setTimeout(cb, 1);
+
+const cancelIdleCallback = (typeof window !== 'undefined' && window.cancelIdleCallback)
+    ? window.cancelIdleCallback
+    : clearTimeout;
+
 class ShikiView {
     decorations: DecorationSet = RangeSet.empty
     lastPos = {
         from: 0,
         to: 0
     }
+    // Track pending async highlight to cancel if viewport changes again
+    private pendingHighlight: ReturnType<typeof requestIdleCallback> | null = null;
 
-    constructor(public shikiHighlighter: ShikiHighlighter) {
+    constructor(public shikiHighlighter: ShikiHighlighter, view: EditorView) {
+        this.updateHighlight(view)
     }
 
     // when crashed
 
     destroy() {
+        this.cancelPendingHighlight();
         this.clearDecorations()
     }
 
     update(update: ViewUpdate) {
         if (update.docChanged) {
-            console.log("docChanged");
             this.docChangeHighlight(update);
             return
         }
         if (update.viewportChanged) {
-            this.updateHighlight(update);
+            this.updateHighlight(update.view);
             return
         }
         for (let tr of update.transactions) {
             for (let effect of tr.effects) {
                 if (effect.is(updateEffect)) {
                     this.shikiHighlighter.update(effect.value, update.view).then(
-                        () => this.updateHighlight(update)
+                        () => this.updateHighlight(update.view)
                     )
                 }
             }
@@ -60,6 +72,13 @@ class ShikiView {
 
     private clearDecorations() {
         this.decorations = RangeSet.empty
+    }
+
+    private cancelPendingHighlight() {
+        if (this.pendingHighlight !== null) {
+            cancelIdleCallback(this.pendingHighlight as number);
+            this.pendingHighlight = null;
+        }
     }
 
     docChangeHighlight(update: ViewUpdate) {
@@ -72,14 +91,12 @@ class ShikiView {
         }
 
         for (let { from, to } of newVisibleRanges) {
-            console.log(update);
-
             // when docChanged
             update.changes.iterChanges((oldStart, oldEnd, newStart, newEnd, inserted) => {
                 if (oldStart === 0 && oldStart === newStart) {
                     // Remove all previous deco
                     this.clearDecorations()
-                    this.updateHighlight(update);
+                    this.updateHighlight(update.view);
                     return;
                 }
 
@@ -95,30 +112,77 @@ class ShikiView {
         }
     }
 
-    updateHighlight(update: ViewUpdate) {
-        const builder = new RangeSetBuilder<Decoration>();
-        const doc = update.state.doc;
-        const newVisibleRanges = update.view.visibleRanges;
+    /**
+     * Scheme 2: Deferred Highlighting
+     * 1. Cancel any pending highlight work
+     * 2. Clear decorations immediately (show unstyled text)
+     * 3. Schedule async highlight with requestIdleCallback
+     * 4. Update decorations when done
+     */
+    updateHighlight(view: EditorView) {
+        // Cancel any pending work from previous scroll
+        this.cancelPendingHighlight();
 
-        // when the viewport is changed, the decorations should be updated
-        for (let { from, to } of newVisibleRanges) {
-            // Find the range that needs to be newly highlighted
-            this.shikiHighlighter.highlight(doc, from, to, (from, to, mark) => {
-                builder.add(from, to, mark)
-            })
-            this.lastPos = { from, to }
-        }
-        this.decorations = builder.finish()
+        const doc = view.state.doc;
+        const newVisibleRanges = view.visibleRanges.slice(); // Copy to avoid mutation
+
+        console.log('[@cmshiki/editor] updateHighlight called. Visible ranges:', newVisibleRanges.length);
+
+        // Store current viewport for comparison after async work
+        const requestedRanges = newVisibleRanges.map(r => ({ from: r.from, to: r.to }));
+
+        // Schedule highlighting in idle time (doesn't block UI)
+        this.pendingHighlight = requestIdleCallback(() => {
+            console.log('[@cmshiki/editor] requestIdleCallback executed');
+            // Check if viewport hasn't changed during wait
+            const currentRanges = view.visibleRanges;
+            const isSameViewport = requestedRanges.every((r, i) =>
+                currentRanges[i] && r.from === currentRanges[i].from && r.to === currentRanges[i].to
+            );
+
+            if (!isSameViewport) {
+                console.log('[@cmshiki/editor] Viewport changed, skipping highlight');
+                // Viewport changed, skip this work (new highlight already scheduled)
+                return;
+            }
+
+            console.log('[@cmshiki/editor] applying highlight for ranges:', newVisibleRanges);
+            const builder = new RangeSetBuilder<Decoration>();
+            let hasMarks = false;
+
+            // Perform synchronous tokenization (but it's running in idle time)
+            for (let { from, to } of newVisibleRanges) {
+                this.shikiHighlighter.highlight(doc, from, to, (from, to, mark) => {
+                    builder.add(from, to, mark)
+                    hasMarks = true;
+                })
+                this.lastPos = { from, to }
+            }
+
+            console.log('[@cmshiki/editor] highlighting complete. marks found:', hasMarks);
+            this.decorations = builder.finish()
+            this.pendingHighlight = null;
+
+            // Trigger re-render with new decoissrations
+            // Use a no-op transaction to update the view
+            view.dispatch({});
+        });
     }
 }
 
 export const shikiViewPlugin = (shikiHighlighter: ShikiHighlighter, _options: ShikiToCMOptions) => {
 
     return {
-        viewPlugin: ViewPlugin.define((view: EditorView) =>
-            new ShikiView(shikiHighlighter.setView(view))
-            , {
-                decorations: v => v.decorations
-            })
+        viewPlugin: ViewPlugin.define((view: EditorView) => {
+            console.log('[@cmshiki/editor] ViewPlugin factory called!');
+            try {
+                return new ShikiView(shikiHighlighter.setView(view), view)
+            } catch (e) {
+                console.error('[@cmshiki/editor] Error in ShikiView constructor:', e);
+                throw e;
+            }
+        }, {
+            decorations: v => v.decorations
+        })
     }
 };
