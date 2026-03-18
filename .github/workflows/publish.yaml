@@ -20,7 +20,6 @@ jobs:
         uses: uxiew/action-setup-node-pnpm@main
         with:
           node-version: "24"
-          pnpm-version: "10.12.4"
           args: "--frozen-lockfile"
 
       - name: Test
@@ -60,7 +59,6 @@ jobs:
         uses: uxiew/action-setup-node-pnpm@main
         with:
           node-version: "24"
-          pnpm-version: "10.12.4"
           args: "--frozen-lockfile"
           registry-url: "https://registry.npmjs.org"
 

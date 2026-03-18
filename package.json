@@ -4,7 +4,11 @@
   "author": "uxiew",
   "license": "MIT",
   "version": "0.1.0",
-  "packageManager": "pnpm@9.10.0",
+  "packageManager": "pnpm@10.12.4",
+  "engines": {
+    "node": ">=24",
+    "pnpm": ">=10"
+  },
   "bugs": {
     "url": "https://github.com/uxiew/codemirror-shiki/issues"
   },
