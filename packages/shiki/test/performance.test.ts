@@ -115,13 +115,17 @@ describe('Performance: Large File Rendering', () => {
   const MEDIUM_FILE_LINES = 1000;
   const LARGE_FILE_LINES = 5000;
   const VERY_LARGE_FILE_LINES = 10000;
+  const IS_CI = process.env.CI === 'true';
 
   // Performance thresholds (in milliseconds)
+  // Note:
+  // - JSDOM + GitHub hosted runners have large timing jitter compared to local machines.
+  // - Keep local thresholds strict, but relax CI thresholds to avoid false negatives.
   const THRESHOLDS = {
     initTime: 500, // Shiki initialization
-    smallFileRender: 50, // 100 lines
-    mediumFileRender: 200, // 1000 lines
-    largeFileRender: 1000, // 5000 lines
+    smallFileRender: IS_CI ? 350 : 50, // 100 lines
+    mediumFileRender: IS_CI ? 1200 : 200, // 1000 lines
+    largeFileRender: IS_CI ? 3000 : 1000, // 5000 lines
     incrementalUpdate: 16, // Single line update (target: 60fps = 16ms)
     scrollUpdate: 16, // Viewport change (target: 60fps)
   };
