@@ -43,6 +43,7 @@ jobs:
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
 
+
   publish-npm:
     name: Publish Packages
     needs: verify
