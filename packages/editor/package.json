@@ -1,6 +1,6 @@
 {
   "name": "@cmshiki/editor",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "CodeMirror editor with Shiki syntax highlighting",
   "author": "uxiew",
   "homepage": "https://github.com/uxiew/codemirror-shiki#readme",
