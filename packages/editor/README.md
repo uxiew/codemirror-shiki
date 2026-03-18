@@ -46,8 +46,6 @@ const editor = new ShikiEditor({
 });
 ```
 
-构造函数路径会先创建不带高亮的编辑器，再异步注入高亮扩展，因此可能短暂闪烁。
-
 ## 常用 API
 
 ```ts
@@ -146,13 +144,3 @@ const editor = await ShikiEditor.create({
   engine: "javascript",
 });
 ```
-
-### 避免歧义
-
-- 不建议同时传 `theme` 和 `themes`。
-- `defaultColor` 是 `themes` 的 key，不是主题值（不是 `github-dark` 这种值）。
-- 若 `defaultColor` 不合法，库会自动回退到可用 key 并输出 warning，避免首屏进入错误主题态。
-
-## License
-
-MIT

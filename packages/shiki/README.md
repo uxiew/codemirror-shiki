@@ -74,7 +74,7 @@ view.dispatch({
 ### 1) 三者职责
 
 - `theme`：单主题输入，适合只需要一个主题的场景。
-- `themes`：主题注册表，键是你业务侧可切换的“主题键”（例如 `light` / `dark` / `nord`），值是 Shiki 主题名或主题对象。
+- `themes`：主题注册表，键是业务侧可切换的“主题键”（例如 `light` / `dark` / `nord`），值是 Shiki 主题名或主题对象。
 - `defaultColor`：初始主题键，只在 `themes` 的键空间内生效。
 
 ### 2) 推荐规则
@@ -84,12 +84,8 @@ view.dispatch({
 - `defaultColor` 必须指向 `themes` 中存在的 key（例如 `dark`）。
 - 如果 `defaultColor` 非法，库会告警并自动回退到可用 key（优先 `dark`、其次 `light`，否则第一个 key）。
 
-### 3) 不推荐写法
 
-- 同时传 `theme` 与 `themes`，容易造成“谁是主配置源”的理解歧义。
-- 把 `defaultColor` 当作 Shiki 主题名传入（例如传 `github-dark`，但 `themes` 键是 `dark`）。
-
-### 4) 推荐示例（可切换）
+### 3) 推荐示例（可切换）
 
 ```ts
 const { shiki, getTheme } = await shikiToCodeMirror({
@@ -105,7 +101,7 @@ const { shiki, getTheme } = await shikiToCodeMirror({
 });
 ```
 
-### 5) 单主题示例（不切换）
+### 4) 单主题示例（不切换）
 
 ```ts
 const { shiki } = await shikiToCodeMirror({
@@ -149,27 +145,3 @@ export const updateEffect: StateEffect<Partial<Options>>;
 export const themeCompartment: Compartment;
 export const configsFacet: Facet<ShikiToCMOptions, ShikiToCMOptions>;
 ```
-
-## 常见问题
-
-### `ShikiError: engine option is required for synchronous mode`
-
-这是 Shiki 核心在同步初始化路径下要求显式传入 `engine`。建议：
-
-1. 优先使用异步初始化（`await shikiToCodeMirror(...)`）。
-2. 显式指定 `engine: "oniguruma"` 或 `engine: "javascript"`。
-3. 如果自行 `createHighlighterCore(...)`，务必传入 `engine`。
-
-### `engine: "javascript"` 出现类型报错
-
-若 IDE 提示 `Type 'string' is not assignable to type Awaitable<RegexEngine>`，通常是类型缓存或旧声明文件导致。
-
-建议按顺序排查：
-
-1. 确认使用最新包（或最新 yalc 同步结果）。
-2. 清理构建缓存并重启 TS Server / IDE。
-3. 若使用 monorepo + yalc，优先 `--force` 启动开发服务避免旧预构建缓存干扰。
-
-## License
-
-MIT

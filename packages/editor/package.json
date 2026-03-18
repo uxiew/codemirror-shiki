@@ -13,12 +13,11 @@
     "dist"
   ],
   "keywords": [
+    "codemirror-shiki",
     "codemirror",
+    "codemirror-shiki-editor",
     "codemirror-editor",
-    "codejar",
-    "shiki-codejar",
-    "shiki-editor",
-    "codemirror-shiki-editor"
+    "shiki-editor"
   ],
   "sideEffects": false,
   "exports": {

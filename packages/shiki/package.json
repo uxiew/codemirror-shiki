@@ -14,9 +14,9 @@
     "url": "https://github.com/uxiew/codemirror-shiki/issues"
   },
   "keywords": [
+    "codemirror-shiki",
     "codemirror",
     "shiki",
-    "codemirror-shiki",
     "codemirror-plugin"
   ],
   "files": [
