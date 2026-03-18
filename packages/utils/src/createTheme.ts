@@ -124,12 +124,10 @@ export const createTheme = ({ theme, settings, classes }: CreateThemeOptions): E
 
     if (settings.selection) {
         cmEditorStyle["& .cm-line"] = {
-            "& ::selection, &::selection": { backgroundColor: settings.selection + ' !important' },
+            "& ::selection, &::selection": { backgroundColor: settings.selection },
+            "& span::selection": { backgroundColor: settings.selection },
         };
-        cmEditorStyle["& .cm-selectionBackground"] = {
-            backgroundColor: settings.selection + ' !important',
-        };
-        cmEditorStyle["& .cm-selectionLayer .selectionBackground"] = {
+        cmEditorStyle["& .cm-selectionBackground, & .cm-selectionLayer .selectionBackground"] = {
             backgroundColor: settings.selection + ' !important',
         };
     }
