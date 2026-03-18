@@ -17,7 +17,11 @@
     "codemirror",
     "codemirror-shiki-editor",
     "codemirror-editor",
-    "shiki-editor"
+    "shiki-editor",
+    "syntax-highlighting",
+    "editor",
+    "vue",
+    "react"
   ],
   "sideEffects": false,
   "exports": {

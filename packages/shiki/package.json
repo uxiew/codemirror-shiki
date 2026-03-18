@@ -17,7 +17,11 @@
     "codemirror-shiki",
     "codemirror",
     "shiki",
-    "codemirror-plugin"
+    "codemirror-plugin",
+    "syntax-highlighting",
+    "highlight",
+    "textmate",
+    "tm-grammars"
   ],
   "files": [
     "dist"

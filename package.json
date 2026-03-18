@@ -9,6 +9,14 @@
     "node": ">=24",
     "pnpm": ">=10"
   },
+  "keywords": [
+    "codemirror",
+    "codemirror-shiki",
+    "shiki",
+    "syntax-highlighting",
+    "editor",
+    "textmate"
+  ],
   "bugs": {
     "url": "https://github.com/uxiew/codemirror-shiki/issues"
   },

@@ -14,8 +14,11 @@
   ],
   "keywords": [
     "codemirror",
+    "codemirror-shiki",
     "codemirror-utils",
-    "codemirror-plugin"
+    "codemirror-plugin",
+    "shiki",
+    "syntax-highlighting"
   ],
   "sideEffects": false,
   "type": "module",
