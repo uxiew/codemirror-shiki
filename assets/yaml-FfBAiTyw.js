@@ -1,0 +1,11 @@
+const e=`name: cmshiki-playground-sample
+version: 1.0.0
+private: true
+features:
+  - theme-switch
+  - grammar-switch
+  - engine-toggle
+meta:
+  author: cmshiki
+  year: 2026
+`;export{e as default};

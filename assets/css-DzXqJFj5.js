@@ -1,0 +1,35 @@
+const n=`html {
+  margin: 0;
+  background: black;
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  width: 100%;
+  height: inherit;
+}
+
+body > div {
+  height: 25%;
+}
+
+.thumb {
+  float: left;
+  width: 25%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.blowup {
+  display: block;
+  position: absolute;
+  object-fit: contain;
+  object-position: center;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2000;
+}
+`;export{n as default};

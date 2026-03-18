@@ -1,0 +1,14 @@
+const n=`#!/usr/bin/env bash
+
+set -euo pipefail
+
+echo "Run playground checks..."
+
+for file in samples/*.sample; do
+  name="$(basename "$file")"
+  lines="$(wc -l < "$file" | tr -d ' ')"
+  echo " - $name: \${lines} lines"
+done
+
+echo "Done."
+`;export{n as default};

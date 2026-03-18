@@ -1,0 +1,15 @@
+const n=`{
+  "name": "cmshiki-playground-sample",
+  "version": "1.0.0",
+  "private": true,
+  "features": [
+    "theme-switch",
+    "grammar-switch",
+    "engine-toggle"
+  ],
+  "meta": {
+    "author": "cmshiki",
+    "year": 2026
+  }
+}
+`;export{n as default};
