@@ -2,6 +2,8 @@ import { EditorView } from '@codemirror/view';
 import { Compartment, Extension } from '@codemirror/state';
 import {
   type Options,
+  type ThemeKey,
+  type ThemeRegistry,
   shikiToCodeMirror,
   themeCompartment,
   updateEffect,
@@ -16,7 +18,29 @@ interface PreloadedShiki {
   getTheme: (name?: string, view?: EditorView) => Extension;
 }
 
-export class ShikiEditor {
+function resolveInitialThemeKey(
+  options: ShikiEditorOptions,
+): string | undefined {
+  if (options.defaultColor === false) return undefined;
+
+  const themes = options.themes;
+  if (!themes) {
+    return typeof options.theme === 'string' ? options.theme : undefined;
+  }
+
+  if (
+    typeof options.defaultColor === 'string' &&
+    themes[options.defaultColor]
+  ) {
+    return options.defaultColor;
+  }
+
+  if (themes.dark) return 'dark';
+  if (themes.light) return 'light';
+  return Object.keys(themes)[0];
+}
+
+export class ShikiEditor<TThemes extends ThemeRegistry = ThemeRegistry> {
   view: EditorView;
   getTheme: Promise<(name?: string, view?: EditorView) => Extension>;
 
@@ -29,18 +53,32 @@ export class ShikiEditor {
    *   parent: document.getElementById('editor'),
    *   doc: 'const x = 1',
    *   lang: 'javascript',
-   *   theme: 'github-dark'
+   *   themes: {
+   *     light: 'github-light',
+   *     dark: 'github-dark',
+   *   },
+   *   defaultColor: 'dark',
+   *   engine: 'javascript',
    * })
    */
-  static async create(options: ShikiEditorOptions): Promise<ShikiEditor> {
-    const { shikiOptions, CodeMirrorOptions: cmOptions } =
-      partitionOptions(options);
+  static async create<TThemes extends ThemeRegistry = ThemeRegistry>(
+    options: ShikiEditorOptions<TThemes>,
+  ): Promise<ShikiEditor<TThemes>> {
+    const { shikiOptions } = partitionOptions(options);
 
     // 1. 先异步加载 Shiki
     const { shiki, getTheme } = await shikiToCodeMirror(shikiOptions);
 
     // 2. 创建时直接包含高亮扩展
-    return new ShikiEditor(options, { shiki, getTheme });
+    const editor = new ShikiEditor<TThemes>(options, { shiki, getTheme });
+    const initialThemeKey = resolveInitialThemeKey(options);
+
+    // Ensure the first rendered frame uses the expected runtime theme key.
+    if (initialThemeKey) {
+      await editor.changeTheme(initialThemeKey);
+    }
+
+    return editor;
   }
 
   /**
@@ -50,7 +88,7 @@ export class ShikiEditor {
    * @param preloaded - 内部使用，预加载的 Shiki 数据
    */
   constructor(
-    private readonly options: ShikiEditorOptions,
+    private readonly options: ShikiEditorOptions<TThemes>,
     preloaded?: PreloadedShiki,
   ) {
     const { shikiOptions, CodeMirrorOptions: cmOptions } =
@@ -96,7 +134,7 @@ export class ShikiEditor {
     }
   }
 
-  private async registerInternal(options: ShikiEditorOptions) {
+  private async registerInternal(options: ShikiEditorOptions<TThemes>) {
     console.log('[@cmshiki/editor] registerInternal started');
     const { shiki, getTheme } = await shikiToCodeMirror(options);
     console.log('[@cmshiki/editor] shikiToCodeMirror finished', { shiki });
@@ -117,7 +155,7 @@ export class ShikiEditor {
    * Dynamically set listening events,listen when the document changed.
    * @param {(u: ViewUpdate)}
    */
-  setOnUpdate(callback: ShikiEditorOptions['onUpdate']) {
+  setOnUpdate(callback: ShikiEditorOptions<TThemes>['onUpdate']) {
     this.options.onUpdate = callback;
   }
 
@@ -139,7 +177,7 @@ export class ShikiEditor {
    *
    * @param {string} name - theme style name,like `light`、`dark`、`dim`
    */
-  async changeTheme(name: string) {
+  async changeTheme(name: ThemeKey<TThemes> | (string & {})) {
     const theme = (await this.getTheme)(name, this.view);
     this.view.dispatch({
       effects: [themeCompartment.reconfigure(theme), updateEffect.of({})],

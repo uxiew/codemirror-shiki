@@ -54,12 +54,30 @@ export class Base {
    * get default theme
    */
   initTheme() {
-    const { defaultColor } = this.configs;
+    const { defaultColor, themes, warnings } = this.configs;
     if (defaultColor === false) {
       return EditorView.baseTheme({});
     }
+
+    const hasColorKey = (key: string) => Boolean(themes?.[key]);
+    const fallbackColor = hasColorKey('dark')
+      ? 'dark'
+      : hasColorKey('light')
+        ? 'light'
+        : Object.keys(themes || {})[0] || 'light';
+
+    let resolvedColor = fallbackColor;
+
+    if (typeof defaultColor === 'string' && hasColorKey(defaultColor)) {
+      resolvedColor = defaultColor;
+    } else if (typeof defaultColor === 'string' && warnings) {
+      console.warn(
+        `[@cmshiki/shiki] \`defaultColor: "${defaultColor}"\` is invalid. Fallback to "${fallbackColor}".`,
+      );
+    }
+
     // init current theme
-    this.currentTheme = defaultColor || 'light';
+    this.currentTheme = resolvedColor;
     return this.getTheme(this.currentTheme);
   }
 

@@ -10,6 +10,13 @@
 - `playground`：可视化测试页面，用于联动验证 grammar / theme / engine。
 - `samples`：按 `samples/<grammar>.sample` 命名的测试代码样例，供 playground 自动加载。
 
+配置建议（高频踩坑点）：
+
+- 需要主题切换时，优先使用 `themes + defaultColor`。
+- `defaultColor` 是 `themes` 的 key，不是主题值。
+- 不建议同时传 `theme` 和 `themes`，避免歧义。
+- `defaultColor` 非法时会回退到可用 key，并打印 warning，避免首屏主题错配。
+
 ## 快速开始
 
 ```bash

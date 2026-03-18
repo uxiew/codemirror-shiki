@@ -1,44 +1,31 @@
+import { shikiViewPlugin } from './viewPlugin';
+import type { Highlighter, ShikiToCMOptions } from './types/types';
+import { themeCompartment } from './base';
+import { type EditorView } from '@codemirror/view';
+import { ShikiHighlighter } from './highlighter';
 
-import {
-  shikiViewPlugin,
-} from "./viewPlugin"
-import type {
-  Highlighter,
-  ShikiToCMOptions,
-} from './types/types'
-import { Base, themeCompartment } from "./base"
-import { type EditorView } from "@codemirror/view"
-import { ShikiHighlighter } from "./highlighter"
-
-
-
-export const shikiPlugin = async (highlighter: Highlighter, ctOptions: ShikiToCMOptions) => {
-
-  const shikiHighlighter = new ShikiHighlighter(
-    highlighter,
-    ctOptions,
-  )
-  const { viewPlugin } = shikiViewPlugin(shikiHighlighter, ctOptions)
-
-  const BaseCore = Base.init(highlighter, ctOptions)
-  // const highlighter = Base.init(highlighter, ctOptions)
+export const shikiPlugin = async (
+  highlighter: Highlighter,
+  ctOptions: ShikiToCMOptions,
+) => {
+  const shikiHighlighter = new ShikiHighlighter(highlighter, ctOptions);
+  const { viewPlugin } = shikiViewPlugin(shikiHighlighter, ctOptions);
+  const initialTheme = shikiHighlighter.initTheme();
 
   return {
     /**
- * get theme
- *
- * @param { string } name `light\dark\...`
- * @returns { Extension } codemirror theme extension
- * @throws `xxxx theme not registered!`
- */
+     * get theme
+     *
+     * @param { string } name `light\dark\...`
+     * @returns { Extension } codemirror theme extension
+     * @throws `xxxx theme not registered!`
+     */
     getTheme(name?: string, view?: any) {
-      return view
-        ? shikiHighlighter.setView(view).getTheme(name)
-        : BaseCore.getTheme(name)
+      if (view) {
+        shikiHighlighter.setView(view as EditorView);
+      }
+      return shikiHighlighter.getTheme(name);
     },
-    shiki: [
-      themeCompartment.of(BaseCore.initTheme()),
-      viewPlugin,
-    ]
-  }
-}
+    shiki: [themeCompartment.of(initialTheme), viewPlugin],
+  };
+};

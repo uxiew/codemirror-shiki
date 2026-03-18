@@ -25,11 +25,11 @@ const editor = await ShikiEditor.create({
   parent: document.getElementById("editor")!,
   doc: "const answer = 42",
   lang: "typescript",
-  theme: "github-dark",
   themes: {
     light: "github-light",
     dark: "github-dark",
   },
+  defaultColor: "dark",
   engine: "oniguruma", // or "javascript"
 });
 ```
@@ -103,6 +103,7 @@ editor.setOnUpdate((u) => {
 
 - `lang`
 - `theme` / `themes`
+- `defaultColor`
 - `engine`
 - `highlighter`
 - `themeStyle`
@@ -110,6 +111,47 @@ editor.setOnUpdate((u) => {
 - `parent`
 - `extensions`
 - `onUpdate`
+
+## 主题配置建议
+
+### 可切换主题（推荐）
+
+只使用 `themes + defaultColor`：
+
+```ts
+const editor = await ShikiEditor.create({
+  parent: el,
+  doc: code,
+  lang: "javascript",
+  themes: {
+    light: "github-light",
+    dark: "github-dark",
+    nord: "nord",
+  },
+  defaultColor: "dark",
+  engine: "javascript",
+});
+```
+
+### 单主题
+
+只使用 `theme`：
+
+```ts
+const editor = await ShikiEditor.create({
+  parent: el,
+  doc: code,
+  lang: "javascript",
+  theme: "github-dark",
+  engine: "javascript",
+});
+```
+
+### 避免歧义
+
+- 不建议同时传 `theme` 和 `themes`。
+- `defaultColor` 是 `themes` 的 key，不是主题值（不是 `github-dark` 这种值）。
+- 若 `defaultColor` 不合法，库会自动回退到可用 key 并输出 warning，避免首屏进入错误主题态。
 
 ## License
 

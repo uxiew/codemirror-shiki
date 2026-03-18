@@ -59,15 +59,62 @@ view.dispatch({
 `shikiToCodeMirror(options)` 支持以下常用字段：
 
 - `lang`：语言名或自定义 language 输入
-- `theme`：单主题别名（会映射到 `themes.light`）
-- `themes`：主题映射对象，支持 `light` / `dark` 及任意别名
-- `defaultColor`：初始主题别名，默认 `light`
+- `theme`：单主题简写；当未传 `themes` 时，会映射到 `themes.light`
+- `themes`：多主题映射对象，支持 `light` / `dark` 及任意别名（推荐）
+- `defaultColor`：初始主题键，必须是 `themes` 的 key，默认 `light`
 - `themeStyle`：`"cm"` 或 `"shiki"`，默认 `"cm"`
 - `engine`：
   - `"oniguruma"`（默认）：兼容性更高
   - `"javascript"`：启动更快
   - 自定义 `RegexEngine`
 - `highlighter`：预初始化的 Shiki highlighter（传入后跳过内部初始化）
+
+## `theme` / `themes` / `defaultColor` 关系说明
+
+### 1) 三者职责
+
+- `theme`：单主题输入，适合只需要一个主题的场景。
+- `themes`：主题注册表，键是你业务侧可切换的“主题键”（例如 `light` / `dark` / `nord`），值是 Shiki 主题名或主题对象。
+- `defaultColor`：初始主题键，只在 `themes` 的键空间内生效。
+
+### 2) 推荐规则
+
+- 只用单主题：传 `theme`，不传 `themes` / `defaultColor`。
+- 需要主题切换：只用 `themes + defaultColor`，不再传 `theme`。
+- `defaultColor` 必须指向 `themes` 中存在的 key（例如 `dark`）。
+- 如果 `defaultColor` 非法，库会告警并自动回退到可用 key（优先 `dark`、其次 `light`，否则第一个 key）。
+
+### 3) 不推荐写法
+
+- 同时传 `theme` 与 `themes`，容易造成“谁是主配置源”的理解歧义。
+- 把 `defaultColor` 当作 Shiki 主题名传入（例如传 `github-dark`，但 `themes` 键是 `dark`）。
+
+### 4) 推荐示例（可切换）
+
+```ts
+const { shiki, getTheme } = await shikiToCodeMirror({
+  lang: "javascript",
+  themes: {
+    light: "github-light",
+    dark: "github-dark",
+    nord: "nord",
+  },
+  defaultColor: "dark",
+  themeStyle: "cm",
+  engine: "javascript",
+});
+```
+
+### 5) 单主题示例（不切换）
+
+```ts
+const { shiki } = await shikiToCodeMirror({
+  lang: "javascript",
+  theme: "github-dark",
+  themeStyle: "cm",
+  engine: "javascript",
+});
+```
 
 ## 预初始化 highlighter（推荐多编辑器场景）
 
@@ -112,6 +159,16 @@ export const configsFacet: Facet<ShikiToCMOptions, ShikiToCMOptions>;
 1. 优先使用异步初始化（`await shikiToCodeMirror(...)`）。
 2. 显式指定 `engine: "oniguruma"` 或 `engine: "javascript"`。
 3. 如果自行 `createHighlighterCore(...)`，务必传入 `engine`。
+
+### `engine: "javascript"` 出现类型报错
+
+若 IDE 提示 `Type 'string' is not assignable to type Awaitable<RegexEngine>`，通常是类型缓存或旧声明文件导致。
+
+建议按顺序排查：
+
+1. 确认使用最新包（或最新 yalc 同步结果）。
+2. 清理构建缓存并重启 TS Server / IDE。
+3. 若使用 monorepo + yalc，优先 `--force` 启动开发服务避免旧预构建缓存干扰。
 
 ## License
 
