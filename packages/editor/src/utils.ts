@@ -25,6 +25,9 @@ export function partitionOptions<TThemes extends ThemeRegistry = ThemeRegistry>(
     'defaultColor',
     'engine',
     'highlighter',
+    'resolveLanguage',
+    'resolveTheme',
+    'versionGuard',
   ];
   const CodeMirrorKeys: CodeMirrorConfigKeys[] = [
     'extensions',

@@ -40,6 +40,14 @@ export type ThemeKey<TThemes extends ThemeRegistry = ThemeRegistry> = Extract<
 /** Regex engine option for Shiki tokenization */
 export type EngineOption = 'javascript' | 'oniguruma' | Awaitable<RegexEngine>;
 
+export type ResolveLanguageFn = (
+  lang: string,
+) => Awaitable<LanguageInput | ReadonlyArray<LanguageInput> | undefined | null>;
+
+export type ResolveThemeFn = (
+  theme: string,
+) => Awaitable<ThemeInput | undefined | null>;
+
 export interface ExtraOptions<TThemes extends ThemeRegistry = ThemeRegistry>
   extends
     Omit<CodeOptionsMultipleThemes, 'themes' | 'defaultColor' | 'engine'>,
@@ -148,6 +156,28 @@ export interface Options<
    * ```
    */
   highlighter?: Highlighter;
+  /**
+   * Resolve and return language input(s) when a language string is not bundled
+   * or cannot be loaded directly on a shared highlighter.
+   *
+   * Useful for fine-grained dynamic imports in business apps.
+   */
+  resolveLanguage?: ResolveLanguageFn;
+  /**
+   * Resolve and return theme input when a theme string cannot be loaded directly.
+   *
+   * Useful for fine-grained dynamic imports in business apps.
+   */
+  resolveTheme?: ResolveThemeFn;
+  /**
+   * Runtime compatibility guard for external shared highlighter instances.
+   *
+   * When enabled, incompatible highlighter objects will fail fast with
+   * actionable errors (for example, wrong Shiki major version or invalid object).
+   *
+   * @default true
+   */
+  versionGuard?: boolean;
 }
 
 type UnknownOptions =
@@ -156,7 +186,10 @@ type UnknownOptions =
   | 'colorReplacements'
   | 'grammarState'
   | 'grammarContextCode'
-  | 'highlighter';
+  | 'highlighter'
+  | 'resolveLanguage'
+  | 'resolveTheme'
+  | 'versionGuard';
 
 export type ShikiToCMOptions<TThemes extends ThemeRegistry = ThemeRegistry> =
   Required<Omit<Options<TThemes>, 'theme' | UnknownOptions>> &

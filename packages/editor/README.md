@@ -118,6 +118,9 @@ editor.onDocChanged((u) => {
 - `defaultColor`
 - `engine`
 - `highlighter`
+- `resolveLanguage`
+- `resolveTheme`
+- `versionGuard`
 - `themeStyle`
 - `doc`
 - `parent`
@@ -164,6 +167,41 @@ const editor = await ShikiEditor.create({
 
 - `@cmshiki/editor/core` 适合对包体积敏感的场景。
 - `@cmshiki/editor` 仍可传 `highlighter`，但默认入口更偏向开箱体验，不作为“严格精细打包”入口。
+
+### 减少业务样板代码（4、5）
+
+你可以直接复用 `@cmshiki/shiki/core` 的 resolver 工具，避免在业务里自己维护语言/主题缓存：
+
+```ts
+import {
+  createCachedLanguageResolver,
+  createCachedThemeResolver,
+} from "@cmshiki/shiki/core";
+import { ShikiEditor } from "@cmshiki/editor/core";
+
+const resolveLanguage = createCachedLanguageResolver({
+  javascript: () => import("@shikijs/langs/javascript"),
+  json: () => import("@shikijs/langs/json"),
+});
+
+const resolveTheme = createCachedThemeResolver({
+  "github-dark": () => import("@shikijs/themes/github-dark"),
+  "github-light": () => import("@shikijs/themes/github-light"),
+});
+
+const editor = await ShikiEditor.create({
+  parent: el,
+  doc: code,
+  highlighter: sharedHighlighter,
+  lang: "javascript",
+  themes: { dark: "github-dark", light: "github-light" },
+  resolveLanguage,
+  resolveTheme,
+  versionGuard: true,
+});
+```
+
+建议：`shiki`、`@shikijs/langs`、`@shikijs/themes` 保持同 major，避免运行时语法资源不兼容。
 
 这样可以同时保留：
 

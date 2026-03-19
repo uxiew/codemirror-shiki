@@ -1,8 +1,10 @@
 import type { Options } from './types/types';
+import type { LanguageInput } from './types/shiki.types';
 import {
   getRuntimeLanguageLabel,
   normalizeRuntimeLanguages,
 } from './language-normalize';
+import { getVersionGuardHint } from './compat';
 
 type ShikiOptions = Omit<Options, 'theme' | 'themeStyle'>;
 
@@ -21,6 +23,44 @@ async function isLanguageReady(
   } catch {
     return false;
   }
+}
+
+async function loadResolvedLanguages(
+  options: ShikiOptions,
+  highlighter: any,
+  languageName: string,
+): Promise<boolean> {
+  if (
+    !options.resolveLanguage ||
+    typeof highlighter.loadLanguage !== 'function'
+  ) {
+    return false;
+  }
+
+  const resolved = await Promise.resolve(options.resolveLanguage(languageName));
+  const languageObjects = normalizeRuntimeLanguages(resolved).filter(
+    (lang): lang is LanguageInput => typeof lang !== 'string',
+  );
+  if (languageObjects.length === 0) {
+    return false;
+  }
+
+  await Promise.resolve(highlighter.loadLanguage(...languageObjects));
+  return true;
+}
+
+async function loadResolvedTheme(
+  options: ShikiOptions,
+  highlighter: any,
+  themeName: string,
+): Promise<boolean> {
+  if (!options.resolveTheme || typeof highlighter.loadTheme !== 'function') {
+    return false;
+  }
+  const resolved = await Promise.resolve(options.resolveTheme(themeName));
+  if (!resolved) return false;
+  await Promise.resolve(highlighter.loadTheme(resolved));
+  return true;
 }
 
 export async function syncSharedHighlighter(options: ShikiOptions) {
@@ -68,11 +108,34 @@ export async function syncSharedHighlighter(options: ShikiOptions) {
             if (await isLanguageReady(highlighter, languageName)) {
               return;
             }
+            try {
+              const resolved = await loadResolvedLanguages(
+                options,
+                highlighter,
+                languageName,
+              );
+              if (resolved) return;
+            } catch (resolveError) {
+              if (options.warnings) {
+                const hint = getVersionGuardHint(resolveError);
+                console.warn(
+                  `[@cmshiki/shiki] Failed to resolve language on shared highlighter: ${languageName}`,
+                  resolveError,
+                );
+                if (hint) {
+                  console.warn(`[@cmshiki/shiki] ${hint}`);
+                }
+              }
+            }
             if (options.warnings) {
+              const hint = getVersionGuardHint(error);
               console.warn(
                 `[@cmshiki/shiki] Failed to load language on shared highlighter: ${languageName}`,
                 error,
               );
+              if (hint) {
+                console.warn(`[@cmshiki/shiki] ${hint}`);
+              }
             }
           }
         })(),
@@ -84,16 +147,42 @@ export async function syncSharedHighlighter(options: ShikiOptions) {
     for (const themeValue of Object.values(options.themes)) {
       tasks.push(
         Promise.resolve(highlighter.loadTheme(themeValue as any)).catch(
-          (error) => {
+          async (error) => {
+            const themeName = String(
+              typeof themeValue === 'string'
+                ? themeValue
+                : (themeValue as any)?.name || 'custom-theme',
+            );
+            try {
+              if (typeof themeValue === 'string') {
+                const resolved = await loadResolvedTheme(
+                  options,
+                  highlighter,
+                  themeValue,
+                );
+                if (resolved) return;
+              }
+            } catch (resolveError) {
+              if (options.warnings) {
+                const hint = getVersionGuardHint(resolveError);
+                console.warn(
+                  `[@cmshiki/shiki] Failed to resolve theme on shared highlighter: ${themeName}`,
+                  resolveError,
+                );
+                if (hint) {
+                  console.warn(`[@cmshiki/shiki] ${hint}`);
+                }
+              }
+            }
             if (options.warnings) {
+              const hint = getVersionGuardHint(error);
               console.warn(
-                `[@cmshiki/shiki] Failed to load theme on shared highlighter: ${String(
-                  typeof themeValue === 'string'
-                    ? themeValue
-                    : (themeValue as any)?.name || 'custom-theme',
-                )}`,
+                `[@cmshiki/shiki] Failed to load theme on shared highlighter: ${themeName}`,
                 error,
               );
+              if (hint) {
+                console.warn(`[@cmshiki/shiki] ${hint}`);
+              }
             }
           },
         ),

@@ -1,5 +1,6 @@
 import type { Options } from './types/types';
 import { syncSharedHighlighter } from './shared-highlighter';
+import { assertCompatibleHighlighter } from './compat';
 
 type ShikiOptions = Omit<Options, 'theme' | 'themeStyle'>;
 
@@ -16,6 +17,13 @@ export async function initShikiCore(options: ShikiOptions) {
         'Create it with `createHighlighterCore` and explicit langs/themes to enable fine-grained bundling.',
     );
   }
+
+  assertCompatibleHighlighter(
+    options.highlighter,
+    '@cmshiki/shiki/core',
+    options.warnings,
+    options.versionGuard !== false,
+  );
 
   return syncSharedHighlighter(options);
 }

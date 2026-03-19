@@ -18,6 +18,11 @@ codemirror-shiki stably integrates the syntax highlighting capabilities of Shiki
 - Shiki 的语义高亮精度和主题体系；
 - 按需选择“开箱即用”或“精细化性能控制”。
 
+补充：
+
+- `@cmshiki/shiki` / `@cmshiki/editor` 新增 resolver 机制（`resolveLanguage` / `resolveTheme`）来减少业务侧动态 import 样板代码。
+- 默认开启 `versionGuard`，对不兼容的 shared highlighter 快速失败并给出明确错误提示。
+
 ## 快速开始
 
 ```bash

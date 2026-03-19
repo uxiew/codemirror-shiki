@@ -71,6 +71,9 @@ view.dispatch({
   - 自定义 `RegexEngine`
 - `highlighter`：预初始化的 Shiki highlighter（传入后跳过内部初始化）
   - 当使用 shared highlighter 时，库会优先加载语言对象；字符串语言加载失败会降级为告警，不阻塞编辑器渲染
+- `resolveLanguage`：语言字符串无法直接加载时的兜底解析器（用于动态 import 语言对象）
+- `resolveTheme`：主题字符串无法直接加载时的兜底解析器（用于动态 import 主题对象）
+- `versionGuard`：共享 highlighter 版本/形态护栏，默认 `true`
 
 ## `theme` / `themes` / `defaultColor` 关系说明
 
@@ -197,6 +200,54 @@ const { shiki } = await shikiToCodeMirror({
 
 - `@cmshiki/shiki/core` 不会走 `bundledLanguages/bundledThemes` 自动加载路径。
 - 未传 `highlighter` 时会抛出明确错误，提示改用 core 模式的显式预加载。
+
+## JavaScript 引擎运行时兼容 
+
+`createJavaScriptRegexEngine()` 默认目标会产出 `v` flag，你当前运行时不支持，触发 `Invalid flags ... dgv`。
+
+JavaScript 引擎运行时兼容：
+- 底层自动检测 `RegExp` 是否支持 `v/d`。  
+- 不支持时，引擎改为兼容目标：`createJavaScriptRegexEngine({ target: "ES2018" })`。避免 `dgv` 报错。
+
+## 4) 兜底解析器（减少业务样板代码）
+
+当你在 `core` 模式下做精细打包时，通常会写大量动态 import 和缓存逻辑。现在可以通过 `resolveLanguage` / `resolveTheme` 把兜底逻辑交给底层：
+
+```ts
+import {
+  shikiToCodeMirror,
+  createCachedLanguageResolver,
+  createCachedThemeResolver,
+} from "@cmshiki/shiki/core";
+
+const resolveLanguage = createCachedLanguageResolver({
+  javascript: () => import("@shikijs/langs/javascript"),
+  json: () => import("@shikijs/langs/json"),
+});
+
+const resolveTheme = createCachedThemeResolver({
+  "github-dark": () => import("@shikijs/themes/github-dark"),
+  "github-light": () => import("@shikijs/themes/github-light"),
+});
+
+const { shiki } = await shikiToCodeMirror({
+  highlighter,
+  lang: "javascript",
+  themes: { dark: "github-dark", light: "github-light" },
+  resolveLanguage,
+  resolveTheme,
+});
+```
+
+## 5) 版本护栏（默认开启）
+
+`versionGuard` 默认是 `true`：
+
+- 当传入的 shared highlighter 不是兼容对象（例如缺少关键方法）时会快速抛错
+- 错误信息会明确提示使用 Shiki v3+ 的 `createHighlighter` / `createHighlighterCore`
+- 当捕获到典型版本不匹配异常（例如 `Resolver.getInjections` / `split`）时，会输出“同主版本对齐”的修复提示
+- 推荐将 `shiki`、`@shikijs/langs`、`@shikijs/themes` 保持同一个 major 版本
+- 如需兼容特殊对象，可显式关闭：`versionGuard: false`
 
 ## 参考：
 

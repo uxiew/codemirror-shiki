@@ -4,6 +4,10 @@ import defaultOptions from './config';
 import { initShiki } from './init';
 
 export * from './types/types';
+export {
+  createCachedLanguageResolver,
+  createCachedThemeResolver,
+} from './resolvers';
 export { ShikiHighlighter } from './highlighter';
 export { updateEffect } from './viewPlugin';
 export { themeCompartment, configsFacet } from './base';
