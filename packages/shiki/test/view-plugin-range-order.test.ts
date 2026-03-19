@@ -6,6 +6,7 @@ import {
   buildDecorationsFromEntries,
   normalizeVisibleRanges,
   shouldDeferViewportHighlight,
+  sortDecorationEntries,
   trimRangesByLineBudget,
 } from '../src/viewPlugin';
 
@@ -59,5 +60,20 @@ describe('viewPlugin range safety', () => {
     const line3To = doc.line(3).to;
 
     expect(trimmed).toEqual([{ from: 0, to: line3To }]);
+  });
+
+  it('should sort decoration entries in stable range order', () => {
+    const mark = Decoration.mark({ class: 'tok' });
+    const sorted = sortDecorationEntries([
+      { from: 20, to: 30, mark },
+      { from: 10, to: 15, mark },
+      { from: 10, to: 12, mark },
+    ]);
+
+    expect(sorted.map((e) => [e.from, e.to])).toEqual([
+      [10, 12],
+      [10, 15],
+      [20, 30],
+    ]);
   });
 });
