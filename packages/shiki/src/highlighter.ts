@@ -85,6 +85,7 @@ export class ShikiHighlighter extends Base {
   private grammarStateCache = new Map<number, GrammarState>();
   private lastCachedLine = 0;
   private internal: any = null; // Use any to avoid complex ShikiInternal type issues
+  private isCoreUpdating = false;
 
   constructor(shikiCore: Highlighter, options: ShikiToCMOptions) {
     super(shikiCore, options);
@@ -100,9 +101,14 @@ export class ShikiHighlighter extends Base {
     // Clear cache when options/theme/language changes
     this.grammarStateCache.clear();
     this.lastCachedLine = 0;
-    // Update internal shiki instance access
-    await super.update(options, view);
-    this.internal = this.shikiCore;
+    this.isCoreUpdating = true;
+    try {
+      // Update internal shiki instance access
+      await super.update(options, view);
+      this.internal = this.shikiCore;
+    } finally {
+      this.isCoreUpdating = false;
+    }
   }
 
   private pruneGrammarStateCache(centerLine: number) {
@@ -132,6 +138,10 @@ export class ShikiHighlighter extends Base {
     let produced = 0;
     let nextFrom: number | null = null;
     const maxDecorations = budgetOptions.maxDecorations;
+
+    if (this.isCoreUpdating) {
+      return { produced, nextFrom };
+    }
 
     if (!this.internal) {
       console.warn('highlight: internal not ready');
@@ -168,9 +178,22 @@ export class ShikiHighlighter extends Base {
     // called before setTheme(), first-frame metadata can mismatch the color map.
     // Cast to any because setTheme might not be in the public interface definition but exists at runtime
     const { colorMap } = (internal as any).setTheme(finalThemeName);
-    const grammar = internal.getLanguage(lang);
+    let grammar: any;
+    try {
+      grammar = internal.getLanguage(lang);
+    } catch (error) {
+      if (this.configs.warnings) {
+        console.warn(
+          `highlight: language '${String(lang)}' is not ready yet, skip this frame`,
+          error,
+        );
+      }
+      return { produced, nextFrom };
+    }
     if (!grammar) {
-      console.error(`highlight: grammar not found for lang=${lang}`);
+      if (this.configs.warnings) {
+        console.warn(`highlight: grammar not found for lang=${String(lang)}`);
+      }
       return { produced, nextFrom };
     }
     const themeForeground =
