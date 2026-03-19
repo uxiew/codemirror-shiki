@@ -24,6 +24,9 @@ interface DecorationEntry {
   mark: Decoration;
 }
 
+const RAPID_VIEWPORT_INTERVAL_MS = 48;
+const RAPID_SCROLL_SETTLE_MS = 96;
+
 export function normalizeVisibleRanges(
   ranges: readonly { from: number; to: number }[],
 ): SimpleRange[] {
@@ -78,6 +81,16 @@ export function buildDecorationsFromEntries(
   return builder.finish();
 }
 
+export function shouldDeferViewportHighlight(
+  now: number,
+  lastViewportChangeAt: number,
+  rapidIntervalMs = RAPID_VIEWPORT_INTERVAL_MS,
+): boolean {
+  return (
+    lastViewportChangeAt > 0 && now - lastViewportChangeAt < rapidIntervalMs
+  );
+}
+
 // Polyfill for requestIdleCallback
 const requestIdleCallback =
   typeof window !== 'undefined' && window.requestIdleCallback
@@ -98,7 +111,9 @@ class ShikiView {
   // Track pending async highlight to cancel if viewport changes again
   private pendingHighlight: ReturnType<typeof requestIdleCallback> | null =
     null;
+  private pendingViewportSettle: ReturnType<typeof setTimeout> | null = null;
   private highlightRequestId = 0;
+  private lastViewportChangeAt = 0;
 
   constructor(
     public shikiHighlighter: ShikiHighlighter,
@@ -111,6 +126,7 @@ class ShikiView {
 
   destroy() {
     this.cancelPendingHighlight();
+    this.cancelPendingViewportSettle();
     this.clearDecorations();
   }
 
@@ -120,7 +136,7 @@ class ShikiView {
       return;
     }
     if (update.viewportChanged) {
-      this.updateHighlight(update.view);
+      this.handleViewportChanged(update.view);
       return;
     }
     let reconfigured = false;
@@ -153,6 +169,35 @@ class ShikiView {
       cancelIdleCallback(this.pendingHighlight as number);
       this.pendingHighlight = null;
     }
+  }
+
+  private cancelPendingViewportSettle() {
+    if (this.pendingViewportSettle !== null) {
+      clearTimeout(this.pendingViewportSettle);
+      this.pendingViewportSettle = null;
+    }
+  }
+
+  private handleViewportChanged(view: EditorView) {
+    const now = Date.now();
+    const shouldDefer = shouldDeferViewportHighlight(
+      now,
+      this.lastViewportChangeAt,
+    );
+    this.lastViewportChangeAt = now;
+
+    if (!shouldDefer) {
+      this.cancelPendingViewportSettle();
+      this.updateHighlight(view);
+      return;
+    }
+
+    this.cancelPendingHighlight();
+    this.cancelPendingViewportSettle();
+    this.pendingViewportSettle = setTimeout(() => {
+      this.pendingViewportSettle = null;
+      this.updateHighlight(view);
+    }, RAPID_SCROLL_SETTLE_MS);
   }
 
   docChangeHighlight(update: ViewUpdate) {

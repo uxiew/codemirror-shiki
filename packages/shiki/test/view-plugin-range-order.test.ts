@@ -4,6 +4,7 @@ import { Decoration } from '@codemirror/view';
 import {
   buildDecorationsFromEntries,
   normalizeVisibleRanges,
+  shouldDeferViewportHighlight,
 } from '../src/viewPlugin';
 
 describe('viewPlugin range safety', () => {
@@ -33,5 +34,11 @@ describe('viewPlugin range safety', () => {
       ]);
 
     expect(build).not.toThrow();
+  });
+
+  it('should defer highlight when viewport changes too frequently', () => {
+    expect(shouldDeferViewportHighlight(100, 0)).toBe(false);
+    expect(shouldDeferViewportHighlight(130, 100)).toBe(true);
+    expect(shouldDeferViewportHighlight(220, 100)).toBe(false);
   });
 });
