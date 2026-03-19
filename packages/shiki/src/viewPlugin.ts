@@ -33,7 +33,7 @@ const RAPID_VIEWPORT_INTERVAL_MS = 48;
 const RAPID_SCROLL_SETTLE_MS = 96;
 const COARSE_HIGHLIGHT_LINE_BUDGET = 240;
 const MAX_DECORATIONS_PER_CHUNK = 2500;
-const WORKER_SORT_THRESHOLD = 6000;
+const DOC_HIGHLIGHT_DEBOUNCE_MS = 48;
 
 export function normalizeVisibleRanges(
   ranges: readonly { from: number; to: number }[],
@@ -169,6 +169,7 @@ class ShikiView {
   private pendingHighlight: ReturnType<typeof requestIdleCallback> | null =
     null;
   private pendingViewportSettle: ReturnType<typeof setTimeout> | null = null;
+  private pendingDocHighlight: ReturnType<typeof setTimeout> | null = null;
   private highlightRequestId = 0;
   private lastViewportChangeAt = 0;
 
@@ -184,6 +185,7 @@ class ShikiView {
   destroy() {
     this.cancelPendingHighlight();
     this.cancelPendingViewportSettle();
+    this.cancelPendingDocHighlight();
     this.clearDecorations();
   }
 
@@ -235,6 +237,13 @@ class ShikiView {
     }
   }
 
+  private cancelPendingDocHighlight() {
+    if (this.pendingDocHighlight !== null) {
+      clearTimeout(this.pendingDocHighlight);
+      this.pendingDocHighlight = null;
+    }
+  }
+
   private handleViewportChanged(view: EditorView) {
     const now = Date.now();
     const shouldDefer = shouldDeferViewportHighlight(
@@ -258,65 +267,12 @@ class ShikiView {
   }
 
   docChangeHighlight(update: ViewUpdate) {
-    this.updateHighlight(update.view);
-  }
-
-  private async sortEntriesMaybeWithWorker(
-    entries: DecorationEntry[],
-  ): Promise<DecorationEntry[]> {
-    if (
-      entries.length < WORKER_SORT_THRESHOLD ||
-      typeof Worker === 'undefined' ||
-      typeof Blob === 'undefined' ||
-      typeof URL === 'undefined' ||
-      typeof URL.createObjectURL !== 'function'
-    ) {
-      return sortDecorationEntries(entries);
-    }
-
-    const workerCode = `
-self.onmessage = (event) => {
-  const data = event.data || [];
-  data.sort((a, b) => (a.from - b.from) || (a.to - b.to) || (a.i - b.i));
-  self.postMessage(data.map((x) => x.i));
-};`;
-
-    const blob = new Blob([workerCode], { type: 'application/javascript' });
-    const workerUrl = URL.createObjectURL(blob);
-    const worker = new Worker(workerUrl);
-
-    try {
-      const order = await new Promise<number[]>((resolve, reject) => {
-        const lite = entries.map((entry, i) => ({
-          i,
-          from: entry.from,
-          to: entry.to,
-        }));
-        const timer = setTimeout(() => {
-          reject(new Error('worker sort timeout'));
-        }, 500);
-
-        worker.onmessage = (event) => {
-          clearTimeout(timer);
-          resolve(event.data as number[]);
-        };
-        worker.onerror = (error) => {
-          clearTimeout(timer);
-          reject(error);
-        };
-
-        worker.postMessage(lite);
-      });
-
-      return order
-        .map((i) => entries[i])
-        .filter((entry): entry is DecorationEntry => !!entry);
-    } catch {
-      return sortDecorationEntries(entries);
-    } finally {
-      worker.terminate();
-      URL.revokeObjectURL(workerUrl);
-    }
+    // Merge bursty typing updates and apply once to avoid visible flicker.
+    this.cancelPendingDocHighlight();
+    this.pendingDocHighlight = setTimeout(() => {
+      this.pendingDocHighlight = null;
+      this.updateHighlight(update.view, { chunked: false });
+    }, DOC_HIGHLIGHT_DEBOUNCE_MS);
   }
 
   /**
@@ -326,7 +282,10 @@ self.onmessage = (event) => {
    * 3. Schedule async highlight with requestIdleCallback
    * 4. Update decorations when done
    */
-  updateHighlight(view: EditorView, options: { coarse?: boolean } = {}) {
+  updateHighlight(
+    view: EditorView,
+    options: { coarse?: boolean; chunked?: boolean } = {},
+  ) {
     // Cancel any pending work from previous scroll
     this.cancelPendingHighlight();
 
@@ -335,6 +294,7 @@ self.onmessage = (event) => {
     const newVisibleRanges = options.coarse
       ? trimRangesByLineBudget(doc, normalizedVisibleRanges)
       : normalizedVisibleRanges;
+    const useChunked = options.chunked !== false;
     const requestId = ++this.highlightRequestId;
 
     if (doc.length === 0 || newVisibleRanges.length === 0) {
@@ -362,7 +322,9 @@ self.onmessage = (event) => {
         // Viewport changed, skip this work (new highlight already scheduled)
         return;
       }
-      let remainingDecorations = MAX_DECORATIONS_PER_CHUNK;
+      let remainingDecorations = useChunked
+        ? MAX_DECORATIONS_PER_CHUNK
+        : Number.MAX_SAFE_INTEGER;
 
       try {
         // Chunked tokenization to keep each idle pass within a bounded budget.
@@ -391,35 +353,20 @@ self.onmessage = (event) => {
       }
 
       const snapshot = entries.slice();
-      this.sortEntriesMaybeWithWorker(snapshot)
-        .then((sortedEntries) => {
-          if (requestId !== this.highlightRequestId) return;
-          this.decorations = buildDecorationsFromEntries(sortedEntries, true);
-          this.pendingHighlight = null;
+      if (requestId !== this.highlightRequestId) return;
+      this.decorations = buildDecorationsFromEntries(snapshot);
+      this.pendingHighlight = null;
 
-          // Trigger re-render with current chunk result
-          view.dispatch({});
+      // Trigger re-render with current chunk result
+      view.dispatch({});
 
-          if (
-            pendingRanges.length > 0 &&
-            requestId === this.highlightRequestId
-          ) {
-            this.pendingHighlight = requestIdleCallback(runChunk);
-          }
-        })
-        .catch((error) => {
-          if (requestId !== this.highlightRequestId) return;
-          console.error('[@cmshiki/editor] sort entries failed:', error);
-          this.decorations = buildDecorationsFromEntries(snapshot);
-          this.pendingHighlight = null;
-          view.dispatch({});
-          if (
-            pendingRanges.length > 0 &&
-            requestId === this.highlightRequestId
-          ) {
-            this.pendingHighlight = requestIdleCallback(runChunk);
-          }
-        });
+      if (
+        useChunked &&
+        pendingRanges.length > 0 &&
+        requestId === this.highlightRequestId
+      ) {
+        this.pendingHighlight = requestIdleCallback(runChunk);
+      }
     };
 
     // Schedule highlighting in idle time (doesn't block UI)
