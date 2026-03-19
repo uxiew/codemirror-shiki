@@ -11,6 +11,65 @@ import { Base } from './base';
 // StackElementMetadata provides getForeground and getFontStyle methods
 // for correctly decoding token metadata in Shiki 1.x
 
+const CACHE_MAX_ENTRIES = 12000;
+const CACHE_KEEP_BEHIND_LINES = 3000;
+const CACHE_KEEP_AHEAD_LINES = 6000;
+const CACHE_ANCHOR_INTERVAL = 200;
+
+export interface CachePruneOptions {
+  maxEntries?: number;
+  keepBehindLines?: number;
+  keepAheadLines?: number;
+  anchorInterval?: number;
+}
+
+/**
+ * Compute which cached line states should be removed to bound memory growth.
+ * Keeps a dense window around the current viewport and sparse anchor states elsewhere.
+ */
+export function computePrunableCacheLines(
+  lines: number[],
+  centerLine: number,
+  options: CachePruneOptions = {},
+): number[] {
+  const maxEntries = options.maxEntries ?? CACHE_MAX_ENTRIES;
+  const keepBehindLines = options.keepBehindLines ?? CACHE_KEEP_BEHIND_LINES;
+  const keepAheadLines = options.keepAheadLines ?? CACHE_KEEP_AHEAD_LINES;
+  const anchorInterval = options.anchorInterval ?? CACHE_ANCHOR_INTERVAL;
+
+  if (lines.length <= maxEntries) return [];
+
+  const keepStart = Math.max(1, centerLine - keepBehindLines);
+  const keepEnd = centerLine + keepAheadLines;
+
+  const mustKeep: number[] = [];
+  const removable: number[] = [];
+
+  for (const line of lines) {
+    const inWindow = line >= keepStart && line <= keepEnd;
+    const isAnchor = line % anchorInterval === 0;
+
+    if (inWindow || isAnchor) {
+      mustKeep.push(line);
+    } else {
+      removable.push(line);
+    }
+  }
+
+  if (mustKeep.length <= maxEntries) {
+    return removable;
+  }
+
+  const over = mustKeep.length - maxEntries;
+  const fallbackRemovals = [...mustKeep]
+    .sort(
+      (a, b) => Math.abs(b - centerLine) - Math.abs(a - centerLine) || b - a,
+    )
+    .slice(0, over);
+
+  return removable.concat(fallbackRemovals);
+}
+
 export class ShikiHighlighter extends Base {
   view!: any;
   // Cache grammar state for every line to enable incremental parsing
@@ -35,6 +94,15 @@ export class ShikiHighlighter extends Base {
     // Update internal shiki instance access
     await super.update(options, view);
     this.internal = this.shikiCore;
+  }
+
+  private pruneGrammarStateCache(centerLine: number) {
+    const lines = Array.from(this.grammarStateCache.keys());
+    const toDelete = computePrunableCacheLines(lines, centerLine);
+
+    for (const line of toDelete) {
+      this.grammarStateCache.delete(line);
+    }
   }
 
   /**
@@ -210,6 +278,8 @@ export class ShikiHighlighter extends Base {
         }
       }
     }
+
+    this.pruneGrammarStateCache(endLine);
 
     if (this.isCmStyle) {
       Object.entries(cmClasses).forEach(([k, v]) => {
