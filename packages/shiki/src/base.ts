@@ -13,11 +13,14 @@ import type {
   ShikiToCMOptions,
 } from './types/types';
 import type { StringLiteralUnion } from './types/shiki.types';
-import { initShiki } from './init';
 
 export const themeCompartment = new Compartment();
 
 type ThemeName = BaseOptions['theme'] | StringLiteralUnion<'light' | 'dark'>;
+
+export type InitShikiFn = (
+  options: Omit<Options, 'theme' | 'themeStyle'>,
+) => Promise<Highlighter>;
 
 export const configsFacet = Facet.define<ShikiToCMOptions, ShikiToCMOptions>({
   combine: (values) =>
@@ -33,20 +36,27 @@ export const configsFacet = Facet.define<ShikiToCMOptions, ShikiToCMOptions>({
 export class Base {
   protected themesCache = new Map<ThemeName, Extension>();
   protected currentTheme = 'light';
+  private readonly initShikiFn: InitShikiFn;
 
   /** determines whether the theme style of the current option is `cm` or not */
   get isCmStyle() {
     return this.configs.themeStyle === 'cm';
   }
 
-  static init(shikiCore: Highlighter, configs: ShikiToCMOptions) {
-    return new Base(shikiCore, configs);
+  static init(
+    shikiCore: Highlighter,
+    configs: ShikiToCMOptions,
+    initShikiFn?: InitShikiFn,
+  ) {
+    return new Base(shikiCore, configs, initShikiFn);
   }
 
   constructor(
     protected shikiCore: Highlighter,
     protected configs: ShikiToCMOptions,
+    initShikiFn?: InitShikiFn,
   ) {
+    this.initShikiFn = initShikiFn || (async () => this.shikiCore);
     this.loadThemes();
   }
 
@@ -113,7 +123,7 @@ export class Base {
         _configs.warnings !== options.warnings);
 
     if (shouldReload) {
-      this.shikiCore = await initShiki(this.configs);
+      this.shikiCore = await this.initShikiFn(this.configs as any);
       window.requestAnimationFrame(() => {
         this.loadThemes();
         view.dispatch({

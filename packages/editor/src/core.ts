@@ -7,7 +7,7 @@ import {
   shikiToCodeMirror,
   themeCompartment,
   updateEffect,
-} from '@cmshiki/shiki';
+} from '@cmshiki/shiki/core';
 import type { ShikiEditorOptions } from './types';
 import { partitionOptions } from './utils';
 

@@ -36,6 +36,11 @@
       "require": "./dist/index.cjs",
       "default": "./dist/index.mjs",
       "types": "./dist/index.d.ts"
+    },
+    "./core": {
+      "require": "./dist/core.cjs",
+      "default": "./dist/core.mjs",
+      "types": "./dist/core.d.ts"
     }
   },
   "scripts": {
@@ -51,8 +56,7 @@
   },
   "dependencies": {
     "@cmshiki/utils": "workspace:^",
-    "@shikijs/core": "catalog:",
-    "@shikijs/vscode-textmate": "catalog:"
+    "@shikijs/core": "catalog:"
   },
   "devDependencies": {
     "shiki": "catalog:"

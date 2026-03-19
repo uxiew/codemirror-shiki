@@ -7,6 +7,8 @@ import { createHighlighterCore } from 'shiki/core';
 import { createOnigurumaEngine } from 'shiki/engine/oniguruma';
 import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
 import type { Options } from './types/types';
+import { syncSharedHighlighter } from './shared-highlighter';
+import { normalizeRuntimeLanguages } from './language-normalize';
 
 // Narrow the type to what we need, removing extended properties not in internal options if any
 type ShikiOptions = Omit<Options, 'theme' | 'themeStyle'>;
@@ -30,51 +32,7 @@ function getEngine(
 export async function initShiki(options: ShikiOptions) {
   // If user provides a pre-initialized highlighter, use it directly (zero delay)
   if (options.highlighter) {
-    const highlighter = options.highlighter as any;
-    const tasks: Promise<unknown>[] = [];
-
-    // For shared highlighter instances, eagerly load runtime lang/theme updates.
-    if (options.lang && typeof highlighter.loadLanguage === 'function') {
-      tasks.push(
-        Promise.resolve(highlighter.loadLanguage(options.lang)).catch(
-          (error) => {
-            if (options.warnings) {
-              console.warn(
-                `[@cmshiki/shiki] Failed to load language on shared highlighter: ${String(options.lang)}`,
-                error,
-              );
-            }
-          },
-        ),
-      );
-    }
-
-    if (options.themes && typeof highlighter.loadTheme === 'function') {
-      for (const themeValue of Object.values(options.themes)) {
-        tasks.push(
-          Promise.resolve(highlighter.loadTheme(themeValue as any)).catch(
-            (error) => {
-              if (options.warnings) {
-                console.warn(
-                  `[@cmshiki/shiki] Failed to load theme on shared highlighter: ${String(
-                    typeof themeValue === 'string'
-                      ? themeValue
-                      : (themeValue as any)?.name || 'custom-theme',
-                  )}`,
-                  error,
-                );
-              }
-            },
-          ),
-        );
-      }
-    }
-
-    if (tasks.length > 0) {
-      await Promise.all(tasks);
-    }
-
-    return highlighter;
+    return syncSharedHighlighter(options);
   }
 
   if (!options.themes || Object.keys(options.themes).length === 0) {
@@ -106,11 +64,19 @@ export async function initShiki(options: ShikiOptions) {
     }),
   );
 
-  const langsMap = new Map<string, LanguageInput>();
+  const langsMap = new Map<string, Promise<LanguageInput>>();
+  let customLangId = 0;
 
   async function loadLangs(lang: string | LanguageInput) {
     if (typeof lang !== 'string') {
-      return Promise.resolve(lang);
+      const key =
+        (lang as any).name ||
+        (lang as any).scopeName ||
+        `custom-lang-${++customLangId}`;
+      if (!langsMap.has(key)) {
+        langsMap.set(key, Promise.resolve(lang));
+      }
+      return langsMap.get(key);
     }
 
     if (langsMap.has(lang)) return langsMap.get(lang);
@@ -135,13 +101,16 @@ export async function initShiki(options: ShikiOptions) {
       return undefined;
     }
 
-    const promise = loader().then((m) => m.default || m);
+    const promise = loader().then((m) => (m.default || m) as LanguageInput);
     langsMap.set(lang, promise);
     return promise;
   }
 
   if (options.lang) {
-    await loadLangs(options.lang);
+    const langs = normalizeRuntimeLanguages(options.lang);
+    for (const lang of langs) {
+      await loadLangs(lang);
+    }
   }
 
   // Get the appropriate engine

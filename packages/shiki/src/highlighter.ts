@@ -1,15 +1,30 @@
 import { Text } from '@codemirror/state';
 import { Decoration } from '@codemirror/view';
 import { type GrammarState } from '@shikijs/core';
-import { EncodedTokenMetadata } from '@shikijs/vscode-textmate';
 import { mountStyles, StyleModule } from '@cmshiki/utils';
 
 import type { Highlighter, ShikiToCMOptions } from './types/types';
 import { toStyleObject } from './utils';
-import { Base } from './base';
+import { Base, type InitShikiFn } from './base';
+import {
+  getPrimaryRuntimeLanguage,
+  getRuntimeLanguageLabel,
+} from './language-normalize';
 
-// StackElementMetadata provides getForeground and getFontStyle methods
-// for correctly decoding token metadata in Shiki 1.x
+// Decode vscode-textmate encoded token metadata without importing
+// `@shikijs/vscode-textmate` at runtime (avoids bundler resolution issues).
+const FONT_STYLE_MASK = 30720;
+const FONT_STYLE_OFFSET = 11;
+const FOREGROUND_MASK = 16744448;
+const FOREGROUND_OFFSET = 15;
+
+function getFontStyle(metadata: number): number {
+  return (metadata & FONT_STYLE_MASK) >>> FONT_STYLE_OFFSET;
+}
+
+function getForeground(metadata: number): number {
+  return (metadata & FOREGROUND_MASK) >>> FOREGROUND_OFFSET;
+}
 
 const CACHE_MAX_ENTRIES = 12000;
 const CACHE_KEEP_BEHIND_LINES = 3000;
@@ -87,8 +102,12 @@ export class ShikiHighlighter extends Base {
   private internal: any = null; // Use any to avoid complex ShikiInternal type issues
   private isCoreUpdating = false;
 
-  constructor(shikiCore: Highlighter, options: ShikiToCMOptions) {
-    super(shikiCore, options);
+  constructor(
+    shikiCore: Highlighter,
+    options: ShikiToCMOptions,
+    initShikiFn?: InitShikiFn,
+  ) {
+    super(shikiCore, options, initShikiFn);
     this.internal = shikiCore;
   }
 
@@ -148,9 +167,16 @@ export class ShikiHighlighter extends Base {
       return { produced, nextFrom };
     }
 
-    const lang = this.configs.lang;
+    const lang = getPrimaryRuntimeLanguage(this.configs.lang);
     const themeAlias = this.currentTheme;
     const internal = this.internal;
+
+    if (!lang) {
+      if (this.configs.warnings) {
+        console.warn('highlight: language is not configured');
+      }
+      return { produced, nextFrom };
+    }
 
     // Debug
     // console.log(`highlight: lang=${lang} themeAlias=${themeAlias}`)
@@ -248,7 +274,10 @@ export class ShikiHighlighter extends Base {
 
     // 3. Tokenize visible lines and emit decorations
     let cmClasses: Record<string, string> = {};
-    this.view!.dom.classList.toggle('lang-' + this.configs.lang, true);
+    this.view!.dom.classList.toggle(
+      'lang-' + getRuntimeLanguageLabel(lang).replace(/[^\w-]/g, '_'),
+      true,
+    );
 
     let currentState = state;
     let lastProcessedLine = startLine - 1;
@@ -282,9 +311,8 @@ export class ShikiHighlighter extends Base {
         // Next token start or line end
         const endOffset = j + 1 < len ? tokens[2 * (j + 1)] : line.text.length;
 
-        // Use EncodedTokenMetadata API for correct foreground and font style extraction (Shiki 3.x)
-        const foregroundId = EncodedTokenMetadata.getForeground(metadata);
-        const fontStyle = EncodedTokenMetadata.getFontStyle(metadata);
+        const foregroundId = getForeground(metadata);
+        const fontStyle = getFontStyle(metadata);
 
         // colorMap[0] is reserved/empty, colorMap[1] is default foreground.
         // If a token does not resolve to a specific color, fall back to the

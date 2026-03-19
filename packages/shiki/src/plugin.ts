@@ -1,14 +1,19 @@
 import { shikiViewPlugin } from './viewPlugin';
 import type { Highlighter, ShikiToCMOptions } from './types/types';
-import { themeCompartment } from './base';
+import { themeCompartment, type InitShikiFn } from './base';
 import { type EditorView } from '@codemirror/view';
 import { ShikiHighlighter } from './highlighter';
 
 export const shikiPlugin = async (
   highlighter: Highlighter,
   ctOptions: ShikiToCMOptions,
+  initShikiFn?: InitShikiFn,
 ) => {
-  const shikiHighlighter = new ShikiHighlighter(highlighter, ctOptions);
+  const shikiHighlighter = new ShikiHighlighter(
+    highlighter,
+    ctOptions,
+    initShikiFn,
+  );
   const { viewPlugin } = shikiViewPlugin(shikiHighlighter, ctOptions);
   const initialTheme = shikiHighlighter.initTheme();
 

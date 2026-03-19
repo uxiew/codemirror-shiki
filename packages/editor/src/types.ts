@@ -9,8 +9,8 @@ export type ShikiConfigKeys = keyof CMShikiOptions;
 export type CodeMirrorConfigKeys = keyof CMEditorOptions;
 
 export type CMEditorOptions = EditorViewConfig & {
-  /** listen view change, doc change, viewport change, other view update */
-  onUpdate?: (u: ViewUpdate) => void;
+  /** listen document changes only */
+  onDocChanged?: (u: ViewUpdate) => void;
 };
 
 export type ThemeRegistry = CMShikiThemeRegistry;

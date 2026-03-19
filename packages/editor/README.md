@@ -2,6 +2,11 @@
 
 在 `@cmshiki/shiki` 之上的开箱即用编辑器封装。
 
+支持两个入口：
+
+- `@cmshiki/editor`：默认开箱模式（自动按需加载路径）
+- `@cmshiki/editor/core`：严格精细打包模式（建议生产）
+
 ## 安装
 
 ```bash
@@ -34,6 +39,15 @@ const editor = await ShikiEditor.create({
 });
 ```
 
+## 入口选择（重点）
+
+1. 你要最少配置、快速接入：
+   - 使用 `@cmshiki/editor`
+2. 你要严格控制语言/主题打包内容：
+   - 使用 `@cmshiki/editor/core` + `createHighlighterCore(...)` 并传入 `highlighter`
+
+两种入口 API 完全一致，差异仅在底层高亮初始化路径。
+
 ## 兼容用法
 
 ```ts
@@ -58,7 +72,7 @@ class ShikiEditor {
 
   changeTheme(name: string): Promise<void>;
   update(options: Options): void;
-  setOnUpdate(callback: (u: ViewUpdate) => void): void;
+  onDocChanged(callback: (u: ViewUpdate) => void): void;
 
   getValue(): string;
   setValue(newCode: string): void;
@@ -86,7 +100,7 @@ editor.update({
 ### 监听文档变化
 
 ```ts
-editor.setOnUpdate((u) => {
+editor.onDocChanged((u) => {
   if (u.docChanged) {
     console.log(u.state.doc.toString());
   }
@@ -95,7 +109,7 @@ editor.setOnUpdate((u) => {
 
 ## 选项说明
 
-`ShikiEditorOptions` = `@cmshiki/shiki` 的 `Options` + CodeMirror `EditorViewConfig` + `onUpdate`。
+`ShikiEditorOptions` = `@cmshiki/shiki`（或 `@cmshiki/shiki/core`）的 `Options` + CodeMirror `EditorViewConfig` + `onDocChanged`。
 
 常用字段：
 
@@ -108,22 +122,27 @@ editor.setOnUpdate((u) => {
 - `doc`
 - `parent`
 - `extensions`
-- `onUpdate`
+- `onDocChanged`
 
 ## 生产性能建议（按需语言/主题）
 
-`@cmshiki/editor` 同样支持 `highlighter` 选项。若你不希望全量打包语言/主题，推荐在业务侧预初始化共享 highlighter，再传入 `ShikiEditor.create()`：
+若你不希望全量打包语言/主题，推荐：
+
+- 从 `@cmshiki/editor/core` 导入 `ShikiEditor`
+- 业务侧预初始化共享 `highlighter`
+- 传入 `ShikiEditor.create()`
 
 ```ts
 import { createHighlighterCore } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import js from "@shikijs/langs/javascript";
+import ts from "@shikijs/langs/typescript";
 import githubDark from "@shikijs/themes/github-dark";
 import githubLight from "@shikijs/themes/github-light";
-import { ShikiEditor } from "@cmshiki/editor";
+import { ShikiEditor } from "@cmshiki/editor/core";
 
 const sharedHighlighter = await createHighlighterCore({
-  langs: [js],
+  langs: [js, ts],
   themes: [githubDark, githubLight],
   engine: createJavaScriptRegexEngine(),
 });
@@ -132,7 +151,7 @@ const editor = await ShikiEditor.create({
   parent: el,
   doc: code,
   highlighter: sharedHighlighter,
-  lang: "javascript",
+  lang: "typescript",
   themes: {
     dark: "github-dark",
     light: "github-light",
@@ -140,6 +159,11 @@ const editor = await ShikiEditor.create({
   defaultColor: "dark",
 });
 ```
+
+说明：
+
+- `@cmshiki/editor/core` 适合对包体积敏感的场景。
+- `@cmshiki/editor` 仍可传 `highlighter`，但默认入口更偏向开箱体验，不作为“严格精细打包”入口。
 
 这样可以同时保留：
 

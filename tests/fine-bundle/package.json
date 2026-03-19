@@ -1,0 +1,23 @@
+{
+  "name": "fine-bundle-test",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 3344",
+    "build": "vite build",
+    "verify:bundle": "node ./scripts/verify-bundle.mjs",
+    "build:verify": "pnpm run build && pnpm run verify:bundle"
+  },
+  "dependencies": {
+    "@cmshiki/shiki": "workspace:*",
+    "@codemirror/state": "catalog:",
+    "@codemirror/view": "catalog:",
+    "@shikijs/langs": "3.21.0",
+    "@shikijs/themes": "3.21.0",
+    "shiki": "catalog:"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  }
+}

@@ -67,6 +67,18 @@ export interface Options<
   TThemes extends ThemeRegistry = ThemeRegistry,
 > extends Partial<BaseOptions & ExtraOptions<TThemes>> {
   /**
+   * Active language for highlighting.
+   *
+   * Besides the normal string/object language input, this also accepts
+   * language arrays (for example default exports from `@shikijs/langs/*`).
+   * When an array is provided, the first entry is treated as the active
+   * language and the rest are treated as preload candidates.
+   */
+  lang?:
+    | BaseOptions['lang']
+    | ReadonlyArray<LanguageInput>
+    | Array<LanguageInput>;
+  /**
    * A map of color names to themes.
    *
    * `light` and `dark` are required, and arbitrary color names can be added.

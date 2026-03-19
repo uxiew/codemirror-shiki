@@ -1,6 +1,6 @@
 # @cmshiki/shiki
 
-把 Shiki 高亮能力接到 CodeMirror 6 的底层扩展包。
+把 Shiki 高亮能力接到 CodeMirror 的底层扩展包，“兼容默认按需加载”的开箱体验。
 
 ## 安装
 
@@ -59,6 +59,8 @@ view.dispatch({
 `shikiToCodeMirror(options)` 支持以下常用字段：
 
 - `lang`：语言名或自定义 language 输入
+  - 也支持语言数组（例如 `@shikijs/langs/*` 的默认导出）
+  - 传数组时会自动归一化，首项作为当前高亮语言，其余作为预加载语言
 - `theme`：单主题简写；当未传 `themes` 时，会映射到 `themes.light`
 - `themes`：多主题映射对象，支持 `light` / `dark` 及任意别名（推荐）
 - `defaultColor`：初始主题键，必须是 `themes` 的 key，默认 `light`
@@ -68,6 +70,7 @@ view.dispatch({
   - `"javascript"`：启动更快
   - 自定义 `RegexEngine`
 - `highlighter`：预初始化的 Shiki highlighter（传入后跳过内部初始化）
+  - 当使用 shared highlighter 时，库会优先加载语言对象；字符串语言加载失败会降级为告警，不阻塞编辑器渲染
 
 ## `theme` / `themes` / `defaultColor` 关系说明
 
@@ -132,18 +135,49 @@ const { shiki } = await shikiToCodeMirror({
 });
 ```
 
-## 性能与打包建议（对齐 Shiki Best Performance）
-
-如果你希望避免“按名称动态加载所有语言/主题 chunk”，建议构建一个共享 highlighter，并只导入你需要的语言和主题：
+如果你使用的是 `@shikijs/langs/*` 默认导出（可能是数组），可以直接传给 `lang`：
 
 ```ts
+import jsLang from "@shikijs/langs/javascript";
+
+const { shiki } = await shikiToCodeMirror({
+  highlighter,
+  lang: jsLang, // 语言对象或语言对象数组都可
+  themes: { dark: "github-dark", light: "github-light" },
+});
+```
+
+## 入口选择（避免混淆）
+
+先看这条规则：
+
+1. 你要“开箱即用、自动按需加载”：
+   - 用 `@cmshiki/shiki`
+2. 你要“严格精细打包（只保留指定语言/主题）”：
+   - 用 `@cmshiki/shiki/core` + `createHighlighterCore(...)`
+
+原因（已在 `tests/fine-bundle` 实测）：
+
+- 使用 `@cmshiki/shiki/core` 时，只会打包你显式传入的语言/主题。
+- 把同一份代码的入口改成 `@cmshiki/shiki` 后，会额外产出大量语言/主题 chunk（因为默认入口包含 bundled loader 路径）。
+
+## 性能与打包建议（对齐 Shiki Best Performance）
+
+项目支持两种模式：
+
+1. 默认模式：传 `lang/theme(s)`，库内部按需加载。
+2. 高性能模式：传入你自己预初始化的 `highlighter`（推荐生产）。
+
+当你需要像 `shiki/core` 一样严格控制语言/主题打包时，适合生产环境性能治理，建议在启动时预加载常用语言和主题，减少首次切换延迟：
+
+```ts
+import { shikiToCodeMirror } from "@cmshiki/shiki/core";
 import { createHighlighterCore } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import js from "@shikijs/langs/javascript";
 import ts from "@shikijs/langs/typescript";
 import githubDark from "@shikijs/themes/github-dark";
 import githubLight from "@shikijs/themes/github-light";
-import { shikiToCodeMirror } from "@cmshiki/shiki";
 
 const highlighter = await createHighlighterCore({
   langs: [js, ts],
@@ -154,30 +188,17 @@ const highlighter = await createHighlighterCore({
 const { shiki } = await shikiToCodeMirror({
   highlighter,
   lang: "typescript",
-  themes: {
-    dark: "github-dark",
-    light: "github-light",
-  },
+  themes: { dark: "github-dark", light: "github-light" },
   defaultColor: "dark",
 });
 ```
 
 说明：
 
-- 这种方式由你决定最终打包内容（语言与主题），更适合生产环境性能治理。
-- 当你在运行时调用 `update({ lang/theme })` 时，库会尝试在共享 highlighter 上同步 `loadLanguage/loadTheme`，避免语言切换瞬间报错。
-- 仍建议在启动时预加载常用语言和主题，减少首次切换延迟。
+- `@cmshiki/shiki/core` 不会走 `bundledLanguages/bundledThemes` 自动加载路径。
+- 未传 `highlighter` 时会抛出明确错误，提示改用 core 模式的显式预加载。
 
-## 导出 API
+## 参考：
 
-```ts
-export async function shikiToCodeMirror(options: Options): Promise<{
-  shiki: Extension;
-  getTheme: (name?: string, view?: EditorView) => Extension;
-}>;
-
-export class ShikiHighlighter {}
-export const updateEffect: StateEffect<Partial<Options>>;
-export const themeCompartment: Compartment;
-export const configsFacet: Facet<ShikiToCMOptions, ShikiToCMOptions>;
-```
+- https://shiki.style/guide/best-performance
+- https://shiki.style/guide/install

@@ -36,7 +36,7 @@ export function partitionOptions<TThemes extends ThemeRegistry = ThemeRegistry>(
     'root',
     'scrollTo',
     'doc',
-    'onUpdate',
+    'onDocChanged',
   ];
 
   function filter<T extends keyof ShikiEditorOptions<TThemes>>(keys: T[]) {
