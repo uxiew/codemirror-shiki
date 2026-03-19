@@ -26,3 +26,30 @@ pnpm test
 pnpm -F playground build
 ```
 
+## 设计取舍：CodeMirror + Shiki
+
+当前设计是分层的：
+
+- `@cmshiki/shiki`：保留 CodeMirror 扩展生态（插件、快捷键、编辑性能）；
+- Shiki 只负责高亮语义和主题映射；
+- `@cmshiki/editor`：在上层封装异步初始化与主题切换，降低接入成本。
+
+这意味着你可以同时拿到：
+
+- CodeMirror 的编辑交互能力；
+- Shiki 的语义高亮精度和主题体系；
+- 按需选择“开箱即用”或“精细化性能控制”。
+
+## 与 Shiki Best Performance 对齐
+
+项目支持两种模式：
+
+1. 默认模式：传 `lang/theme(s)`，库内部按需加载。
+2. 高性能模式：传入你自己预初始化的 `highlighter`（推荐生产）。
+
+如果你不想全量打包语言/主题，推荐使用 Shiki core 的 fine-grained 方式，只引入需要的语言和主题，再通过 `highlighter` 传入本库。
+
+参考：
+
+- https://shiki.style/guide/best-performance
+- https://shiki.style/guide/install

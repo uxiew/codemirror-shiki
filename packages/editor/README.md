@@ -110,6 +110,43 @@ editor.setOnUpdate((u) => {
 - `extensions`
 - `onUpdate`
 
+## 生产性能建议（按需语言/主题）
+
+`@cmshiki/editor` 同样支持 `highlighter` 选项。若你不希望全量打包语言/主题，推荐在业务侧预初始化共享 highlighter，再传入 `ShikiEditor.create()`：
+
+```ts
+import { createHighlighterCore } from "shiki/core";
+import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
+import js from "@shikijs/langs/javascript";
+import githubDark from "@shikijs/themes/github-dark";
+import githubLight from "@shikijs/themes/github-light";
+import { ShikiEditor } from "@cmshiki/editor";
+
+const sharedHighlighter = await createHighlighterCore({
+  langs: [js],
+  themes: [githubDark, githubLight],
+  engine: createJavaScriptRegexEngine(),
+});
+
+const editor = await ShikiEditor.create({
+  parent: el,
+  doc: code,
+  highlighter: sharedHighlighter,
+  lang: "javascript",
+  themes: {
+    dark: "github-dark",
+    light: "github-light",
+  },
+  defaultColor: "dark",
+});
+```
+
+这样可以同时保留：
+
+- CodeMirror 的编辑性能和插件体系；
+- Shiki 的语义高亮和主题能力；
+- 对最终 bundle 的精细控制。
+
 ## 主题配置建议
 
 ### 可切换主题（推荐）

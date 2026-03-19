@@ -30,8 +30,51 @@ function getEngine(
 export async function initShiki(options: ShikiOptions) {
   // If user provides a pre-initialized highlighter, use it directly (zero delay)
   if (options.highlighter) {
-    console.log('[@cmshiki/shiki] Using pre-initialized highlighter');
-    return options.highlighter;
+    const highlighter = options.highlighter as any;
+    const tasks: Promise<unknown>[] = [];
+
+    // For shared highlighter instances, eagerly load runtime lang/theme updates.
+    if (options.lang && typeof highlighter.loadLanguage === 'function') {
+      tasks.push(
+        Promise.resolve(highlighter.loadLanguage(options.lang)).catch(
+          (error) => {
+            if (options.warnings) {
+              console.warn(
+                `[@cmshiki/shiki] Failed to load language on shared highlighter: ${String(options.lang)}`,
+                error,
+              );
+            }
+          },
+        ),
+      );
+    }
+
+    if (options.themes && typeof highlighter.loadTheme === 'function') {
+      for (const themeValue of Object.values(options.themes)) {
+        tasks.push(
+          Promise.resolve(highlighter.loadTheme(themeValue as any)).catch(
+            (error) => {
+              if (options.warnings) {
+                console.warn(
+                  `[@cmshiki/shiki] Failed to load theme on shared highlighter: ${String(
+                    typeof themeValue === 'string'
+                      ? themeValue
+                      : (themeValue as any)?.name || 'custom-theme',
+                  )}`,
+                  error,
+                );
+              }
+            },
+          ),
+        );
+      }
+    }
+
+    if (tasks.length > 0) {
+      await Promise.all(tasks);
+    }
+
+    return highlighter;
   }
 
   if (!options.themes || Object.keys(options.themes).length === 0) {

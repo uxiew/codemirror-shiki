@@ -132,6 +132,42 @@ const { shiki } = await shikiToCodeMirror({
 });
 ```
 
+## 性能与打包建议（对齐 Shiki Best Performance）
+
+如果你希望避免“按名称动态加载所有语言/主题 chunk”，建议构建一个共享 highlighter，并只导入你需要的语言和主题：
+
+```ts
+import { createHighlighterCore } from "shiki/core";
+import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
+import js from "@shikijs/langs/javascript";
+import ts from "@shikijs/langs/typescript";
+import githubDark from "@shikijs/themes/github-dark";
+import githubLight from "@shikijs/themes/github-light";
+import { shikiToCodeMirror } from "@cmshiki/shiki";
+
+const highlighter = await createHighlighterCore({
+  langs: [js, ts],
+  themes: [githubDark, githubLight],
+  engine: createJavaScriptRegexEngine(),
+});
+
+const { shiki } = await shikiToCodeMirror({
+  highlighter,
+  lang: "typescript",
+  themes: {
+    dark: "github-dark",
+    light: "github-light",
+  },
+  defaultColor: "dark",
+});
+```
+
+说明：
+
+- 这种方式由你决定最终打包内容（语言与主题），更适合生产环境性能治理。
+- 当你在运行时调用 `update({ lang/theme })` 时，库会尝试在共享 highlighter 上同步 `loadLanguage/loadTheme`，避免语言切换瞬间报错。
+- 仍建议在启动时预加载常用语言和主题，减少首次切换延迟。
+
 ## 导出 API
 
 ```ts
