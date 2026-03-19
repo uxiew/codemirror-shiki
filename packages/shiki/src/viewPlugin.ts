@@ -33,7 +33,6 @@ const RAPID_VIEWPORT_INTERVAL_MS = 48;
 const RAPID_SCROLL_SETTLE_MS = 96;
 const COARSE_HIGHLIGHT_LINE_BUDGET = 240;
 const MAX_DECORATIONS_PER_CHUNK = 2500;
-const DOC_HIGHLIGHT_DEBOUNCE_MS = 48;
 
 export function normalizeVisibleRanges(
   ranges: readonly { from: number; to: number }[],
@@ -169,7 +168,6 @@ class ShikiView {
   private pendingHighlight: ReturnType<typeof requestIdleCallback> | null =
     null;
   private pendingViewportSettle: ReturnType<typeof setTimeout> | null = null;
-  private pendingDocHighlight: ReturnType<typeof setTimeout> | null = null;
   private highlightRequestId = 0;
   private lastViewportChangeAt = 0;
 
@@ -185,12 +183,13 @@ class ShikiView {
   destroy() {
     this.cancelPendingHighlight();
     this.cancelPendingViewportSettle();
-    this.cancelPendingDocHighlight();
     this.clearDecorations();
   }
 
   update(update: ViewUpdate) {
     if (update.docChanged) {
+      // Keep existing decorations aligned immediately with document edits.
+      this.decorations = this.decorations.map(update.changes);
       this.docChangeHighlight(update);
       return;
     }
@@ -237,13 +236,6 @@ class ShikiView {
     }
   }
 
-  private cancelPendingDocHighlight() {
-    if (this.pendingDocHighlight !== null) {
-      clearTimeout(this.pendingDocHighlight);
-      this.pendingDocHighlight = null;
-    }
-  }
-
   private handleViewportChanged(view: EditorView) {
     const now = Date.now();
     const shouldDefer = shouldDeferViewportHighlight(
@@ -267,12 +259,28 @@ class ShikiView {
   }
 
   docChangeHighlight(update: ViewUpdate) {
-    // Merge bursty typing updates and apply once to avoid visible flicker.
-    this.cancelPendingDocHighlight();
-    this.pendingDocHighlight = setTimeout(() => {
-      this.pendingDocHighlight = null;
-      this.updateHighlight(update.view, { chunked: false });
-    }, DOC_HIGHLIGHT_DEBOUNCE_MS);
+    // During typing, prefer stable rendering over deferred/chunked updates.
+    this.cancelPendingHighlight();
+    this.cancelPendingViewportSettle();
+    const requestId = ++this.highlightRequestId;
+
+    const doc = update.view.state.doc;
+    const ranges = normalizeVisibleRanges(update.view.visibleRanges);
+    if (doc.length === 0 || ranges.length === 0) {
+      this.decorations = RangeSet.empty;
+      return;
+    }
+
+    const entries: DecorationEntry[] = [];
+    for (const { from, to } of ranges) {
+      this.shikiHighlighter.highlight(doc, from, to, (from, to, mark) => {
+        entries.push({ from, to, mark });
+      });
+      this.lastPos = { from, to };
+    }
+
+    if (requestId !== this.highlightRequestId) return;
+    this.decorations = buildDecorationsFromEntries(entries);
   }
 
   /**
