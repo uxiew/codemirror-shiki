@@ -5,7 +5,12 @@ import {
   type ViewUpdate,
   type DecorationSet,
 } from '@codemirror/view';
-import { RangeSet, RangeSetBuilder, StateEffect } from '@codemirror/state';
+import {
+  RangeSet,
+  RangeSetBuilder,
+  StateEffect,
+  type Text,
+} from '@codemirror/state';
 
 import type { Highlighter, Options, ShikiToCMOptions } from './types/types';
 import { ShikiHighlighter } from './highlighter';
@@ -26,6 +31,7 @@ interface DecorationEntry {
 
 const RAPID_VIEWPORT_INTERVAL_MS = 48;
 const RAPID_SCROLL_SETTLE_MS = 96;
+const COARSE_HIGHLIGHT_LINE_BUDGET = 240;
 
 export function normalizeVisibleRanges(
   ranges: readonly { from: number; to: number }[],
@@ -89,6 +95,46 @@ export function shouldDeferViewportHighlight(
   return (
     lastViewportChangeAt > 0 && now - lastViewportChangeAt < rapidIntervalMs
   );
+}
+
+export function trimRangesByLineBudget(
+  doc: Text,
+  ranges: SimpleRange[],
+  lineBudget = COARSE_HIGHLIGHT_LINE_BUDGET,
+): SimpleRange[] {
+  if (lineBudget <= 0 || ranges.length === 0) return [];
+
+  let remaining = lineBudget;
+  const trimmed: SimpleRange[] = [];
+
+  for (const range of ranges) {
+    if (remaining <= 0) break;
+
+    const startLine = doc.lineAt(range.from).number;
+    const endLine = doc.lineAt(range.to).number;
+    const lineCount = endLine - startLine + 1;
+
+    if (lineCount <= remaining) {
+      trimmed.push(range);
+      remaining -= lineCount;
+      continue;
+    }
+
+    const capLineNumber = Math.max(startLine, startLine + remaining - 1);
+    const capLine = doc.line(capLineNumber);
+    const capTo = Math.min(range.to, capLine.to);
+    if (capTo > range.from) {
+      trimmed.push({ from: range.from, to: capTo });
+    }
+    remaining = 0;
+  }
+
+  if (trimmed.length === 0) {
+    const firstLine = doc.lineAt(ranges[0].from);
+    return [{ from: ranges[0].from, to: Math.min(ranges[0].to, firstLine.to) }];
+  }
+
+  return trimmed;
 }
 
 // Polyfill for requestIdleCallback
@@ -188,15 +234,15 @@ class ShikiView {
 
     if (!shouldDefer) {
       this.cancelPendingViewportSettle();
-      this.updateHighlight(view);
+      this.updateHighlight(view, { coarse: false });
       return;
     }
 
-    this.cancelPendingHighlight();
     this.cancelPendingViewportSettle();
+    this.updateHighlight(view, { coarse: true });
     this.pendingViewportSettle = setTimeout(() => {
       this.pendingViewportSettle = null;
-      this.updateHighlight(view);
+      this.updateHighlight(view, { coarse: false });
     }, RAPID_SCROLL_SETTLE_MS);
   }
 
@@ -211,12 +257,15 @@ class ShikiView {
    * 3. Schedule async highlight with requestIdleCallback
    * 4. Update decorations when done
    */
-  updateHighlight(view: EditorView) {
+  updateHighlight(view: EditorView, options: { coarse?: boolean } = {}) {
     // Cancel any pending work from previous scroll
     this.cancelPendingHighlight();
 
     const doc = view.state.doc;
-    const newVisibleRanges = normalizeVisibleRanges(view.visibleRanges);
+    const normalizedVisibleRanges = normalizeVisibleRanges(view.visibleRanges);
+    const newVisibleRanges = options.coarse
+      ? trimRangesByLineBudget(doc, normalizedVisibleRanges)
+      : normalizedVisibleRanges;
     const requestId = ++this.highlightRequestId;
 
     if (doc.length === 0 || newVisibleRanges.length === 0) {
