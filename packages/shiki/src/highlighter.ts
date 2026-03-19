@@ -23,6 +23,15 @@ export interface CachePruneOptions {
   anchorInterval?: number;
 }
 
+export interface HighlightBudgetOptions {
+  maxDecorations?: number;
+}
+
+export interface HighlightResult {
+  produced: number;
+  nextFrom: number | null;
+}
+
 /**
  * Compute which cached line states should be removed to bound memory growth.
  * Keeps a dense window around the current viewport and sparse anchor states elsewhere.
@@ -118,10 +127,15 @@ export class ShikiHighlighter extends Base {
     from: number,
     to: number,
     buildDeco: (from: number, to: number, mark: Decoration) => void,
-  ) {
+    budgetOptions: HighlightBudgetOptions = {},
+  ): HighlightResult {
+    let produced = 0;
+    let nextFrom: number | null = null;
+    const maxDecorations = budgetOptions.maxDecorations;
+
     if (!this.internal) {
       console.warn('highlight: internal not ready');
-      return;
+      return { produced, nextFrom };
     }
 
     const lang = this.configs.lang;
@@ -138,7 +152,7 @@ export class ShikiHighlighter extends Base {
       console.warn(
         `highlight: theme '${themeAlias}' not found in themes config`,
       );
-      return;
+      return { produced, nextFrom };
     }
 
     // Resolve theme name (handle string vs object)
@@ -157,7 +171,7 @@ export class ShikiHighlighter extends Base {
     const grammar = internal.getLanguage(lang);
     if (!grammar) {
       console.error(`highlight: grammar not found for lang=${lang}`);
-      return;
+      return { produced, nextFrom };
     }
     const themeForeground =
       (internal as any).getTheme?.(finalThemeName)?.fg ||
@@ -165,7 +179,7 @@ export class ShikiHighlighter extends Base {
       '#000';
     const defaultForeground = colorMap[1] || themeForeground;
 
-    if (!grammar) return;
+    if (!grammar) return { produced, nextFrom };
 
     // 1. Identify line ranges
     const startLine = doc.lineAt(from).number;
@@ -214,8 +228,14 @@ export class ShikiHighlighter extends Base {
     this.view!.dom.classList.toggle('lang-' + this.configs.lang, true);
 
     let currentState = state;
+    let lastProcessedLine = startLine - 1;
 
     for (let i = startLine; i <= endLine; i++) {
+      if (maxDecorations !== undefined && produced >= maxDecorations) {
+        nextFrom = doc.line(i).from;
+        break;
+      }
+
       const line = doc.line(i);
       const lineContent = line.text;
       // Use tokenizeLine2 for performance and correct ID mapping
@@ -275,11 +295,23 @@ export class ShikiHighlighter extends Base {
               },
             }),
           );
+          produced++;
         }
+      }
+
+      lastProcessedLine = i;
+
+      if (maxDecorations !== undefined && produced >= maxDecorations) {
+        if (i < endLine) {
+          nextFrom = doc.line(i + 1).from;
+        }
+        break;
       }
     }
 
-    this.pruneGrammarStateCache(endLine);
+    const pruneCenterLine =
+      lastProcessedLine >= startLine ? lastProcessedLine : startLine;
+    this.pruneGrammarStateCache(pruneCenterLine);
 
     if (this.isCmStyle) {
       Object.entries(cmClasses).forEach(([k, v]) => {
@@ -289,5 +321,7 @@ export class ShikiHighlighter extends Base {
         });
       });
     }
+
+    return { produced, nextFrom };
   }
 }

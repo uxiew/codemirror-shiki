@@ -32,6 +32,7 @@ interface DecorationEntry {
 const RAPID_VIEWPORT_INTERVAL_MS = 48;
 const RAPID_SCROLL_SETTLE_MS = 96;
 const COARSE_HIGHLIGHT_LINE_BUDGET = 240;
+const MAX_DECORATIONS_PER_CHUNK = 2500;
 
 export function normalizeVisibleRanges(
   ranges: readonly { from: number; to: number }[],
@@ -276,8 +277,10 @@ class ShikiView {
     // Store current viewport for comparison after async work
     const requestedRanges = newVisibleRanges.map((r) => ({ ...r }));
 
-    // Schedule highlighting in idle time (doesn't block UI)
-    this.pendingHighlight = requestIdleCallback(() => {
+    const pendingRanges = newVisibleRanges.slice();
+    const entries: DecorationEntry[] = [];
+
+    const runChunk = () => {
       if (requestId !== this.highlightRequestId) {
         this.pendingHighlight = null;
         return;
@@ -291,16 +294,29 @@ class ShikiView {
         // Viewport changed, skip this work (new highlight already scheduled)
         return;
       }
-
-      const entries: DecorationEntry[] = [];
+      let remainingDecorations = MAX_DECORATIONS_PER_CHUNK;
 
       try {
-        // Perform synchronous tokenization (but it's running in idle time)
-        for (let { from, to } of newVisibleRanges) {
-          this.shikiHighlighter.highlight(doc, from, to, (from, to, mark) => {
-            entries.push({ from, to, mark });
-          });
-          this.lastPos = { from, to };
+        // Chunked tokenization to keep each idle pass within a bounded budget.
+        while (pendingRanges.length > 0 && remainingDecorations > 0) {
+          const current = pendingRanges.shift()!;
+          const result = this.shikiHighlighter.highlight(
+            doc,
+            current.from,
+            current.to,
+            (from, to, mark) => {
+              if (remainingDecorations <= 0) return;
+              remainingDecorations--;
+              entries.push({ from, to, mark });
+            },
+            { maxDecorations: remainingDecorations },
+          );
+
+          if (result.nextFrom !== null && result.nextFrom < current.to) {
+            pendingRanges.unshift({ from: result.nextFrom, to: current.to });
+          }
+
+          this.lastPos = { from: current.from, to: current.to };
         }
 
         this.decorations = buildDecorationsFromEntries(entries);
@@ -310,12 +326,18 @@ class ShikiView {
 
       this.pendingHighlight = null;
 
-      // Trigger re-render with new decoissrations
-      // Use a no-op transaction to update the view
+      // Trigger re-render with current chunk result
       if (requestId === this.highlightRequestId) {
         view.dispatch({});
       }
-    });
+
+      if (pendingRanges.length > 0 && requestId === this.highlightRequestId) {
+        this.pendingHighlight = requestIdleCallback(runChunk);
+      }
+    };
+
+    // Schedule highlighting in idle time (doesn't block UI)
+    this.pendingHighlight = requestIdleCallback(runChunk);
   }
 }
 
