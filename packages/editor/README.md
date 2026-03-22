@@ -127,6 +127,17 @@ editor.onDocChanged((u) => {
 - `extensions`
 - `onDocChanged`
 
+新增选项语义：
+
+- `resolveLanguage`
+  - 语言字符串无法直接加载时的兜底解析器
+  - 常用于业务动态 import 语言模块
+- `resolveTheme`
+  - 主题字符串无法直接加载时的兜底解析器
+- `versionGuard`
+  - 默认 `true`
+  - 传入不兼容 shared highlighter 时快速失败并输出可执行提示
+
 ## 生产性能建议（按需语言/主题）
 
 若你不希望全量打包语言/主题，推荐：
@@ -174,34 +185,81 @@ const editor = await ShikiEditor.create({
 
 ```ts
 import {
-  createCachedLanguageResolver,
-  createCachedThemeResolver,
+  createSharedHighlighterManager,
 } from "@cmshiki/shiki/core";
 import { ShikiEditor } from "@cmshiki/editor/core";
 
-const resolveLanguage = createCachedLanguageResolver({
-  javascript: () => import("@shikijs/langs/javascript"),
-  json: () => import("@shikijs/langs/json"),
-});
-
-const resolveTheme = createCachedThemeResolver({
-  "github-dark": () => import("@shikijs/themes/github-dark"),
-  "github-light": () => import("@shikijs/themes/github-light"),
+const manager = createSharedHighlighterManager({
+  languageLoaders: {
+    javascript: () => import("@shikijs/langs/javascript"),
+    json: () => import("@shikijs/langs/json"),
+  },
+  themeLoaders: {
+    "github-dark": () => import("@shikijs/themes/github-dark"),
+    "github-light": () => import("@shikijs/themes/github-light"),
+  },
+  preloadLanguage: "javascript",
+  preloadThemes: ["github-dark", "github-light"],
 });
 
 const editor = await ShikiEditor.create({
   parent: el,
   doc: code,
-  highlighter: sharedHighlighter,
+  highlighter: await manager.getHighlighter(),
   lang: "javascript",
   themes: { dark: "github-dark", light: "github-light" },
-  resolveLanguage,
-  resolveTheme,
+  resolveLanguage: manager.resolveLanguage,
+  resolveTheme: manager.resolveTheme,
   versionGuard: true,
 });
 ```
 
 建议：`shiki`、`@shikijs/langs`、`@shikijs/themes` 保持同 major，避免运行时语法资源不兼容。
+
+## 缓存方案与非缓存方案
+
+缓存方案（推荐）：
+
+- 使用 `createSharedHighlighterManager`
+- 适合多编辑器、频繁切换语言/主题、需要更稳定交互
+
+非缓存方案（也支持动态按需加载）：
+
+- 直接传 `resolveLanguage` / `resolveTheme` 的 async 函数
+- 适合轻量页面或一次性编辑场景
+
+示例（非缓存）：
+
+```ts
+const editor = await ShikiEditor.create({
+  parent: el,
+  doc: code,
+  highlighter: sharedHighlighter,
+  lang: "typescript",
+  themes: { dark: "github-dark", light: "github-light" },
+  resolveLanguage: async (lang) => {
+    if (lang === "typescript") return (await import("@shikijs/langs/typescript")).default;
+    if (lang === "javascript") return (await import("@shikijs/langs/javascript")).default;
+    return undefined;
+  },
+  resolveTheme: async (theme) => {
+    if (theme === "github-dark") return (await import("@shikijs/themes/github-dark")).default;
+    if (theme === "github-light") return (await import("@shikijs/themes/github-light")).default;
+    return undefined;
+  },
+});
+```
+
+## 精细打包注意事项
+
+- 建议在业务代码中显式导入：
+  - `@shikijs/langs/<name>`
+  - `@shikijs/themes/<name>`
+- 避免使用 `bundledLanguages/bundledThemes`，否则构建产物会出现大量可选语言/主题 chunk。
+- `@cmshiki/editor/core` + `createSharedHighlighterManager` 是当前推荐组合：
+  - 业务代码更短
+  - 包体更可控
+  - 首次渲染与运行时切换行为一致
 
 这样可以同时保留：
 

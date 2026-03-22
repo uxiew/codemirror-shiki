@@ -75,6 +75,99 @@ view.dispatch({
 - `resolveTheme`：主题字符串无法直接加载时的兜底解析器（用于动态 import 主题对象）
 - `versionGuard`：共享 highlighter 版本/形态护栏，默认 `true`
 
+## “动态语言 + 多编辑器 + 懒加载”场景
+
+- `createCachedLanguageResolver(loaders)`：
+  - 为语言动态 import 提供缓存 resolver
+  - 避免业务重复写 `Map + import + default 解包` 样板
+- `createCachedThemeResolver(loaders)`：
+  - 为主题动态 import 提供缓存 resolver
+- `createSharedHighlighterManager(options)`：
+  - 底层统一托管 `getHighlighter()`
+  - 同时暴露 `resolveLanguage` / `resolveTheme`
+  - 适合 `@cmshiki/shiki/core` + 精细打包场景
+
+## 缓存方案使用场景
+
+建议使用缓存 API（`createCached*` / `createSharedHighlighterManager`）的场景：
+
+- 多编辑器并行挂载（同语言/主题会被重复请求）
+- 语言或主题会频繁切换
+- 大型项目中同一页面反复进入/离开
+- 需要稳定首帧和减少重复 `import` / `loadLanguage` 开销
+
+可以不使用缓存 API 的场景：
+
+- 单编辑器、单语言、几乎不切换主题
+- 明确接受每次触发时重复动态 import 成本
+
+关键点：
+
+- 不使用缓存 API 也能动态按需加载
+- 缓存 API 主要解决“重复加载、并发去重、初始化抖动”，不是动态加载的前置条件
+
+无缓存动态加载示例（可用）：
+
+```ts
+const { shiki } = await shikiToCodeMirror({
+  highlighter,
+  lang: "typescript",
+  themes: { dark: "github-dark", light: "github-light" },
+  resolveLanguage: async (lang) => {
+    if (lang === "typescript") return (await import("@shikijs/langs/typescript")).default;
+    if (lang === "javascript") return (await import("@shikijs/langs/javascript")).default;
+    return undefined;
+  },
+  resolveTheme: async (theme) => {
+    if (theme === "github-dark") return (await import("@shikijs/themes/github-dark")).default;
+    if (theme === "github-light") return (await import("@shikijs/themes/github-light")).default;
+    return undefined;
+  },
+});
+```
+
+## API 说明
+
+### `createCachedLanguageResolver`
+
+```ts
+function createCachedLanguageResolver(
+  loaders: Record<string, () => Promise<any>>,
+): (lang: string) => Promise<LanguageInput[] | undefined>;
+```
+
+### `createCachedThemeResolver`
+
+```ts
+function createCachedThemeResolver(
+  loaders: Record<string, () => Promise<any>>,
+): (theme: string) => Promise<ThemeInput | undefined>;
+```
+
+### `createSharedHighlighterManager`
+
+```ts
+function createSharedHighlighterManager(options: {
+  languageLoaders: Record<string, () => Promise<any>>;
+  themeLoaders: Record<string, () => Promise<any>>;
+  preloadLanguage?: string;
+  preloadThemes: readonly string[];
+  langAlias?: Record<string, string>;
+  engine?: "javascript" | RegexEngine | Promise<RegexEngine>;
+  warnings?: boolean;
+}): {
+  getHighlighter: () => Promise<ShikiInternal<never, never>>;
+  resolveLanguage: (lang: string) => Promise<LanguageInput[] | undefined>;
+  resolveTheme: (theme: string) => Promise<ThemeInput | undefined>;
+};
+```
+
+说明：
+
+- `engine` 这里建议优先 `"javascript"`（默认就是 JS 兼容路径）。
+- 如需 Oniguruma，请在业务侧显式创建并传入 `RegexEngine`，不要依赖默认链路。
+- `preloadThemes` 至少 1 项；建议把默认展示主题都预热进去。
+
 ## `theme` / `themes` / `defaultColor` 关系说明
 
 ### 1) 三者职责
@@ -200,6 +293,8 @@ const { shiki } = await shikiToCodeMirror({
 
 - `@cmshiki/shiki/core` 不会走 `bundledLanguages/bundledThemes` 自动加载路径。
 - 未传 `highlighter` 时会抛出明确错误，提示改用 core 模式的显式预加载。
+- 若你在业务里写 `import { bundledLanguages } from "shiki"`，构建器仍可能产出大量语言/theme chunk。
+- 真正精细打包请使用显式模块导入：`@shikijs/langs/<name>`、`@shikijs/themes/<name>`。
 
 ## JavaScript 引擎运行时兼容 
 
@@ -237,6 +332,68 @@ const { shiki } = await shikiToCodeMirror({
   resolveLanguage,
   resolveTheme,
 });
+```
+
+如果你希望把业务里的 `getHighlighter()` 也下沉到底层，可以直接用：
+
+```ts
+import {
+  createSharedHighlighterManager,
+  shikiToCodeMirror,
+} from "@cmshiki/shiki/core";
+
+const manager = createSharedHighlighterManager({
+  languageLoaders: {
+    javascript: () => import("@shikijs/langs/javascript"),
+    typescript: () => import("@shikijs/langs/typescript"),
+    json: () => import("@shikijs/langs/json"),
+  },
+  themeLoaders: {
+    "github-dark": () => import("@shikijs/themes/github-dark"),
+    "github-light": () => import("@shikijs/themes/github-light"),
+  },
+  preloadLanguage: "javascript",
+  preloadThemes: ["github-dark", "github-light"],
+  engine: "javascript",
+});
+
+const highlighter = await manager.getHighlighter();
+
+const { shiki } = await shikiToCodeMirror({
+  highlighter,
+  lang: "typescript",
+  themes: { dark: "github-dark", light: "github-light" },
+  resolveLanguage: manager.resolveLanguage,
+  resolveTheme: manager.resolveTheme,
+});
+```
+
+### 精细打包推荐模板（避免多余 chunk）
+
+```ts
+const manager = createSharedHighlighterManager({
+  languageLoaders: {
+    javascript: () => import("@shikijs/langs/javascript"),
+    typescript: () => import("@shikijs/langs/typescript"),
+    html: () => import("@shikijs/langs/html"),
+    css: () => import("@shikijs/langs/css"),
+    json: () => import("@shikijs/langs/json"),
+    markdown: () => import("@shikijs/langs/markdown"),
+  },
+  themeLoaders: {
+    "github-dark": () => import("@shikijs/themes/github-dark"),
+    "github-light": () => import("@shikijs/themes/github-light"),
+  },
+  preloadLanguage: "javascript",
+  preloadThemes: ["github-dark", "github-light"],
+  engine: "javascript",
+});
+```
+
+不要这样写（会放大可选集合）：
+
+```ts
+import { bundledLanguages, bundledThemes } from "shiki";
 ```
 
 ## 5) 版本护栏（默认开启）
