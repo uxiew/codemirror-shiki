@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { bundledLanguages, bundledThemes } from 'shiki';
 import { createSharedHighlighterManager } from '../src/resolvers';
 
@@ -27,5 +27,35 @@ describe('createSharedHighlighterManager', () => {
 
     const jsonLanguage = await manager.resolveLanguage('json');
     expect(jsonLanguage?.length).toBeGreaterThan(0);
+  });
+
+  it('should cache manager language and theme loader calls', async () => {
+    const languageLoader = vi.fn(async () => ({
+      default: [{ name: 'javascript' }],
+    }));
+    const themeLoader = vi.fn(async () => ({
+      default: { name: 'github-dark' },
+    }));
+
+    const manager = createSharedHighlighterManager({
+      languageLoaders: {
+        javascript: languageLoader,
+      },
+      themeLoaders: {
+        'github-dark': themeLoader,
+      },
+      preloadLanguage: 'javascript',
+      preloadThemes: ['github-dark'],
+      engine: 'javascript',
+      warnings: false,
+    });
+
+    await manager.resolveLanguage('javascript');
+    await manager.resolveLanguage('javascript');
+    await manager.resolveTheme('github-dark');
+    await manager.resolveTheme('github-dark');
+
+    expect(languageLoader).toHaveBeenCalledTimes(1);
+    expect(themeLoader).toHaveBeenCalledTimes(1);
   });
 });

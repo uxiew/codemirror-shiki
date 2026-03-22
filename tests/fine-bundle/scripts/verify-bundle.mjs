@@ -18,6 +18,10 @@ const scenarios = {
     outDir: 'dist-core-resolve',
     mode: 'strict',
   },
+  'core-cache': {
+    outDir: 'dist-core-cache',
+    mode: 'strict',
+  },
 };
 
 const scenario = process.argv[2];

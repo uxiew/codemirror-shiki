@@ -7,12 +7,14 @@
     "build:default": "vite build --config vite.default.config.ts",
     "build:core-preload": "vite build --config vite.core-preload.config.ts",
     "build:core-resolve": "vite build --config vite.core-resolve.config.ts",
+    "build:core-cache": "vite build --config vite.core-cache.config.ts",
     "build": "pnpm run build:core-preload",
-    "build:all": "pnpm run build:default && pnpm run build:core-preload && pnpm run build:core-resolve",
+    "build:all": "pnpm run build:default && pnpm run build:core-preload && pnpm run build:core-resolve && pnpm run build:core-cache",
     "verify:default": "node ./scripts/verify-bundle.mjs default",
     "verify:core-preload": "node ./scripts/verify-bundle.mjs core-preload",
     "verify:core-resolve": "node ./scripts/verify-bundle.mjs core-resolve",
-    "verify:all": "pnpm run verify:default && pnpm run verify:core-preload && pnpm run verify:core-resolve",
+    "verify:core-cache": "node ./scripts/verify-bundle.mjs core-cache",
+    "verify:all": "pnpm run verify:default && pnpm run verify:core-preload && pnpm run verify:core-resolve && pnpm run verify:core-cache",
     "build:verify": "pnpm run build:all && pnpm run verify:all"
   },
   "dependencies": {
