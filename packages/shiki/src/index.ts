@@ -7,6 +7,7 @@ export * from './types/types';
 export {
   createCachedLanguageResolver,
   createCachedThemeResolver,
+  createSharedHighlighterManager,
 } from './resolvers';
 export { ShikiHighlighter } from './highlighter';
 export { updateEffect } from './viewPlugin';

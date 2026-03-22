@@ -4,7 +4,6 @@ import {
   type RegexEngine,
 } from '@shikijs/core';
 import { createHighlighterCore } from 'shiki/core';
-import { createOnigurumaEngine } from 'shiki/engine/oniguruma';
 import type { Options } from './types/types';
 import { syncSharedHighlighter } from './shared-highlighter';
 import {
@@ -22,18 +21,19 @@ type ShikiOptions = Omit<Options, 'theme' | 'themeStyle'>;
 /**
  * Get the appropriate regex engine based on the engine option
  */
-function getEngine(
+async function getEngine(
   engineOption: Options['engine'],
   warnings = true,
-): RegexEngine | Promise<RegexEngine> {
+): Promise<RegexEngine> {
   if (engineOption === 'javascript') {
     return createCompatibleJavaScriptEngine(warnings);
   }
   if (engineOption === 'oniguruma' || !engineOption) {
+    const { createOnigurumaEngine } = await import('shiki/engine/oniguruma');
     return createOnigurumaEngine(import('shiki/wasm'));
   }
   // User provided a custom engine
-  return engineOption;
+  return Promise.resolve(engineOption);
 }
 
 export async function initShiki(options: ShikiOptions) {
