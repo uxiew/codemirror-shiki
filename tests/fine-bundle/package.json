@@ -3,10 +3,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --port 3344",
-    "build": "vite build",
-    "verify:bundle": "node ./scripts/verify-bundle.mjs",
-    "build:verify": "pnpm run build && pnpm run verify:bundle"
+    "dev": "vite --config vite.core-preload.config.ts --port 3344",
+    "build:default": "vite build --config vite.default.config.ts",
+    "build:core-preload": "vite build --config vite.core-preload.config.ts",
+    "build:core-resolve": "vite build --config vite.core-resolve.config.ts",
+    "build": "pnpm run build:core-preload",
+    "build:all": "pnpm run build:default && pnpm run build:core-preload && pnpm run build:core-resolve",
+    "verify:default": "node ./scripts/verify-bundle.mjs default",
+    "verify:core-preload": "node ./scripts/verify-bundle.mjs core-preload",
+    "verify:core-resolve": "node ./scripts/verify-bundle.mjs core-resolve",
+    "verify:all": "pnpm run verify:default && pnpm run verify:core-preload && pnpm run verify:core-resolve",
+    "build:verify": "pnpm run build:all && pnpm run verify:all"
   },
   "dependencies": {
     "@cmshiki/shiki": "workspace:*",

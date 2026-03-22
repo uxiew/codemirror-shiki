@@ -13,50 +13,12 @@ import typescript from '@shikijs/langs/typescript';
 import json from '@shikijs/langs/json';
 import githubDark from '@shikijs/themes/github-dark';
 import githubLight from '@shikijs/themes/github-light';
+import { languageSamples, mountHarness } from './ui';
 
-const app = document.querySelector<HTMLDivElement>('#app');
-if (!app) {
-  throw new Error('Missing #app container');
-}
-
-app.innerHTML = `
-  <div class="header">
-    <h1>Fine-grained Bundle Test</h1>
-    <p class="note">仅预加载 javascript / typescript / json 与 github-dark / github-light</p>
-  </div>
-  <div class="controls">
-    <label>
-      Language
-      <select id="lang-select">
-        <option value="javascript">javascript</option>
-        <option value="typescript">typescript</option>
-        <option value="json">json</option>
-      </select>
-    </label>
-    <label>
-      Theme
-      <select id="theme-select">
-        <option value="dark">dark</option>
-        <option value="light">light</option>
-      </select>
-    </label>
-  </div>
-  <div id="editor"></div>
-`;
-
-const languageSamples: Record<string, string> = {
-  javascript: `function sum(a, b) {\n  return a + b;\n}\n\nconsole.log(sum(1, 2));\n`,
-  typescript: `type User = { id: number; name: string };\n\nconst user: User = { id: 1, name: 'Alice' };\nconsole.log(user);\n`,
-  json: `{"name":"codemirror-shiki","version":"0.2.0","fineBundle":true}\n`,
-};
-
-const editorEl = document.querySelector<HTMLDivElement>('#editor');
-const langSelect = document.querySelector<HTMLSelectElement>('#lang-select');
-const themeSelect = document.querySelector<HTMLSelectElement>('#theme-select');
-
-if (!editorEl || !langSelect || !themeSelect) {
-  throw new Error('Missing required controls');
-}
+const { editorEl, langSelect, themeSelect } = mountHarness(
+  'Core Preloaded',
+  '使用 @cmshiki/shiki/core + createHighlighterCore，预加载 3 语言 + 2 主题',
+);
 
 const highlighter = await createHighlighterCore({
   langs: [javascript, typescript, json],
