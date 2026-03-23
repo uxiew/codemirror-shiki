@@ -11,6 +11,12 @@ import {
 import type { ShikiEditorOptions } from './types';
 import { partitionOptions } from './utils';
 
+export {
+  createCachedLanguageResolver,
+  createCachedThemeResolver,
+  createSharedHighlighterManager,
+} from '@cmshiki/shiki/core';
+
 const shikiComp = new Compartment();
 
 interface PreloadedShiki {
