@@ -2,7 +2,7 @@ import type { LanguageInput, ThemeInput, Awaitable } from './types/shiki.types';
 import { normalizeRuntimeLanguages } from './language-normalize';
 import type { RegexEngine, ShikiInternal } from './types/shiki.types';
 import { createHighlighterCore } from 'shiki/core';
-import { createCompatibleJavaScriptEngine } from './compat';
+import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
 
 type MaybeDefault<T> = T | { default: T };
 
@@ -12,7 +12,7 @@ export type LanguageLoader = () => Awaitable<
 
 export type ThemeLoader = () => Awaitable<MaybeDefault<ThemeInput>>;
 
-export type RuntimeEngineOption = 'javascript' | Awaitable<RegexEngine>;
+export type RuntimeEngineOption = Awaitable<RegexEngine>;
 
 function unwrapModuleDefault<T>(value: MaybeDefault<T>): T {
   if (
@@ -116,23 +116,13 @@ export interface SharedHighlighterManager {
   resolveTheme: ReturnType<typeof createCachedThemeResolver>;
 }
 
-async function resolveEngine(
-  engineOption: RuntimeEngineOption | undefined,
-  warnings: boolean,
-): Promise<RegexEngine> {
-  if (engineOption === 'javascript' || engineOption == null) {
-    return createCompatibleJavaScriptEngine(warnings);
-  }
-  return Promise.resolve(engineOption);
-}
-
 /**
  * Create a shared highlighter manager for fine-grained bundling.
  *
  * It encapsulates:
  * - cached language/theme resolvers
  * - one shared highlighter promise (`getHighlighter`)
- * - runtime-compatible engine resolution
+ * - shared highlighter initialization for fine-grained bundling
  */
 export function createSharedHighlighterManager<
   LangKey extends string = string,
@@ -188,7 +178,6 @@ export function createSharedHighlighterManager<
             '[@cmshiki/shiki] `preloadThemes` must contain at least one theme key.',
           );
         }
-
         const [preloadedLangs, preloadedThemes, engine] = await Promise.all([
           resolveLanguageForPreload(String(preloadLanguage)),
           Promise.all(
@@ -196,15 +185,17 @@ export function createSharedHighlighterManager<
               resolveThemeForPreload(String(themeKey)),
             ),
           ),
-          resolveEngine(options.engine, warnings),
+          options.engine
+            ? Promise.resolve(options.engine)
+            : Promise.resolve(createJavaScriptRegexEngine()),
         ]);
 
         return createHighlighterCore({
           langs: preloadedLangs,
           themes: preloadedThemes,
           langAlias: options.langAlias,
-          warnings,
           engine,
+          warnings,
         });
       })();
     }

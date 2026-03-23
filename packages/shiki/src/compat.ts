@@ -1,35 +1,5 @@
-import type { RegexEngine } from '@shikijs/core';
-import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
-
 const CRITICAL_HIGH_LIGHTER_METHODS = ['getLanguage', 'getTheme', 'setTheme'];
 const OPTIONAL_SYNC_METHODS = ['loadLanguage', 'loadTheme'];
-
-function supportsUnicodeSetsFlag(): boolean {
-  try {
-    // `v` flag requires newer JS engines (Node 20+ / modern Chromium).
-    // Older runtime should fallback to ES2018-compatible regex target.
-    // eslint-disable-next-line no-new
-    new RegExp('.', 'v');
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export function createCompatibleJavaScriptEngine(warnings = true): RegexEngine {
-  const target = supportsUnicodeSetsFlag() ? 'ES2024' : 'ES2018';
-  try {
-    return createJavaScriptRegexEngine({ target });
-  } catch (error) {
-    if (warnings) {
-      console.warn(
-        `[@cmshiki/shiki] Failed to create javascript engine with target "${target}", fallback to ES2018.`,
-        error,
-      );
-    }
-    return createJavaScriptRegexEngine({ target: 'ES2018' });
-  }
-}
 
 export function assertCompatibleHighlighter(
   highlighter: unknown,
