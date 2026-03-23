@@ -153,7 +153,7 @@ function createSharedHighlighterManager(options: {
   preloadLanguage?: string;
   preloadThemes: readonly string[];
   langAlias?: Record<string, string>;
-  engine?: "javascript" | RegexEngine | Promise<RegexEngine>;
+  engine?: RegexEngine | Promise<RegexEngine>;
   warnings?: boolean;
 }): {
   getHighlighter: () => Promise<ShikiInternal<never, never>>;
@@ -164,8 +164,8 @@ function createSharedHighlighterManager(options: {
 
 说明：
 
-- `engine` 这里建议优先 `"javascript"`（默认就是 JS 兼容路径）。
-- 如需 Oniguruma，请在业务侧显式创建并传入 `RegexEngine`，不要依赖默认链路。
+- `createSharedHighlighterManager` 默认使用 JavaScript 引擎（未传 `engine` 时）。
+- 如需 Oniguruma 或自定义引擎，可显式传 `engine`。
 - `preloadThemes` 至少 1 项；建议把默认展示主题都预热进去。
 
 ## `theme` / `themes` / `defaultColor` 关系说明
@@ -354,7 +354,6 @@ const manager = createSharedHighlighterManager({
   },
   preloadLanguage: "javascript",
   preloadThemes: ["github-dark", "github-light"],
-  engine: "javascript",
 });
 
 const highlighter = await manager.getHighlighter();
@@ -386,7 +385,6 @@ const manager = createSharedHighlighterManager({
   },
   preloadLanguage: "javascript",
   preloadThemes: ["github-dark", "github-light"],
-  engine: "javascript",
 });
 ```
 

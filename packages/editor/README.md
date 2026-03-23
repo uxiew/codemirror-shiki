@@ -181,12 +181,12 @@ const editor = await ShikiEditor.create({
 
 ### 减少业务样板代码（4、5）
 
-你可以直接复用 `@cmshiki/shiki/core` 的 resolver 工具，避免在业务里自己维护语言/主题缓存：
+你可以直接复用 `@cmshiki/editor/core` 的 resolver 工具，避免在业务里自己维护语言/主题缓存：
 
 ```ts
 import {
   createSharedHighlighterManager,
-} from "@cmshiki/shiki/core";
+} from "@cmshiki/editor/core";
 import { ShikiEditor } from "@cmshiki/editor/core";
 
 const manager = createSharedHighlighterManager({
@@ -215,6 +215,7 @@ const editor = await ShikiEditor.create({
 ```
 
 建议：`shiki`、`@shikijs/langs`、`@shikijs/themes` 保持同 major，避免运行时语法资源不兼容。
+说明：`createSharedHighlighterManager` 默认使用 JavaScript 引擎；如需自定义再显式传 `engine`。
 
 ## 缓存方案与非缓存方案
 
