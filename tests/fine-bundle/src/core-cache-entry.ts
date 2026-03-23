@@ -26,7 +26,6 @@ const manager = createSharedHighlighterManager({
   },
   preloadLanguage: 'javascript',
   preloadThemes: ['github-dark', 'github-light'],
-  engine: 'javascript',
   warnings: true,
 });
 

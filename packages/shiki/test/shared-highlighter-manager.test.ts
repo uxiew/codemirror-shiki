@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { bundledLanguages, bundledThemes } from 'shiki';
+import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
 import { createSharedHighlighterManager } from '../src/resolvers';
 
 describe('createSharedHighlighterManager', () => {
+  const engine = createJavaScriptRegexEngine({ target: 'ES2018' });
+
   it('should create and cache a shared highlighter', async () => {
     const manager = createSharedHighlighterManager({
       languageLoaders: {
@@ -15,7 +18,6 @@ describe('createSharedHighlighterManager', () => {
       },
       preloadLanguage: 'javascript',
       preloadThemes: ['github-dark', 'github-light'],
-      engine: 'javascript',
       warnings: true,
     });
 
@@ -46,7 +48,7 @@ describe('createSharedHighlighterManager', () => {
       },
       preloadLanguage: 'javascript',
       preloadThemes: ['github-dark'],
-      engine: 'javascript',
+      engine,
       warnings: false,
     });
 
