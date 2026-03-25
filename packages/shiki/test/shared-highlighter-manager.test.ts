@@ -28,7 +28,7 @@ describe('createSharedHighlighterManager', () => {
     expect(first).toBe(second);
     expect(first.getTheme('github-dark')).toBeTruthy();
 
-    const jsonLanguage = await manager.resolveLanguage('json');
+    const jsonLanguage = await manager.resolveLang('json');
     expect(jsonLanguage?.length).toBeGreaterThan(0);
   });
 
@@ -53,12 +53,35 @@ describe('createSharedHighlighterManager', () => {
       warnings: false,
     });
 
-    await manager.resolveLanguage('javascript');
-    await manager.resolveLanguage('javascript');
+    await manager.resolveLang('javascript');
+    await manager.resolveLang('javascript');
     await manager.resolveTheme('github-dark');
     await manager.resolveTheme('github-dark');
 
     expect(languageLoader).toHaveBeenCalledTimes(1);
     expect(themeLoader).toHaveBeenCalledTimes(1);
+  });
+
+  it('should cache per-language highlighters and keep them isolated', async () => {
+    const manager = createSharedHighlighterManager({
+      languageLoaders: {
+        javascript: bundledLanguages.javascript,
+        typescript: bundledLanguages.typescript,
+      },
+      themeLoaders: {
+        'github-dark': bundledThemes['github-dark'],
+      },
+      preloadLanguage: 'javascript',
+      preloadThemes: ['github-dark'],
+      engine: 'oniguruma',
+    });
+
+    const jsHighlighterA = await manager.getHighlighter('javascript');
+    const jsHighlighterB = await manager.getHighlighter('javascript');
+    const tsHighlighter = await manager.getHighlighter('typescript');
+
+    expect(jsHighlighterA).toBe(jsHighlighterB);
+    expect(tsHighlighter).not.toBe(jsHighlighterA);
+    expect(manager.resolveLang).toBe(manager.resolveLang);
   });
 });

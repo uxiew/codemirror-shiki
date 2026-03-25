@@ -13,7 +13,7 @@ import type { CMEditorOptions, ShikiEditorOptions } from './types';
 import { partitionOptions } from './utils';
 
 export {
-  createCachedLanguageResolver,
+  createCachedLangResolver,
   createCachedThemeResolver,
   createSharedHighlighterManager,
 } from '@cmshiki/shiki/core';
@@ -186,7 +186,11 @@ export class ShikiEditor<TThemes extends ThemeRegistry = ThemeRegistry> {
     this.view.destroy();
   }
 
-  update(options: Options) {
+  /**
+   * Render the editor with new options.
+   * @param options
+   */
+  render(options: Options) {
     this.view.dispatch({
       effects: updateEffect.of(options),
     });
@@ -204,13 +208,21 @@ export class ShikiEditor<TThemes extends ThemeRegistry = ThemeRegistry> {
     });
   }
 
-  getValue(): string {
+  /**
+   * Get the document content.
+   * @returns
+   */
+  getDoc(): string {
     return this.view.state.doc.toString();
   }
 
-  setValue(newCode: string) {
+  /**
+   * Set the document content.
+   * @param doc
+   */
+  setDoc(doc: string) {
     this.view.dispatch({
-      changes: { from: 0, to: this.view.state.doc.length, insert: newCode },
+      changes: { from: 0, to: this.view.state.doc.length, insert: doc },
     });
   }
 }

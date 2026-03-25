@@ -71,11 +71,11 @@ class ShikiEditor {
   constructor(options: ShikiEditorOptions);
 
   changeTheme(name: string): Promise<void>;
-  update(options: Options): void;
+  render(options: Options): void;
   onDocChanged(callback: (u: ViewUpdate) => void): void;
 
-  getValue(): string;
-  setValue(newCode: string): void;
+  getDoc(): string;
+  setDoc(newCode: string): void;
   destroy(): void;
 }
 ```
@@ -91,7 +91,7 @@ await editor.changeTheme("dark");
 ### 更新语言或引擎
 
 ```ts
-editor.update({
+editor.render({
   lang: "tsx",
   engine: "javascript",
 });
@@ -206,11 +206,9 @@ const manager = createSharedHighlighterManager({
 const editor = await ShikiEditor.create({
   parent: el,
   doc: code,
-  highlighter: await manager.getHighlighter(),
+  highlighter: await manager.getHighlighter("javascript"),
   lang: "javascript",
   themes: { dark: "github-dark", light: "github-light" },
-  resolveLanguage: manager.resolveLanguage,
-  resolveTheme: manager.resolveTheme,
   versionGuard: true,
 });
 ```
@@ -227,7 +225,7 @@ const editor = await ShikiEditor.create({
 
 非缓存方案（也支持动态按需加载）：
 
-- 直接传 `resolveLanguage` / `resolveTheme` 的 async 函数
+- 不传 `highlighter`，直接传 `resolveLanguage` / `resolveTheme` 的 async 函数
 - 适合轻量页面或一次性编辑场景
 
 示例（非缓存）：
@@ -236,7 +234,6 @@ const editor = await ShikiEditor.create({
 const editor = await ShikiEditor.create({
   parent: el,
   doc: code,
-  highlighter: sharedHighlighter,
   lang: "typescript",
   themes: { dark: "github-dark", light: "github-light" },
   resolveLanguage: async (lang) => {
@@ -251,6 +248,8 @@ const editor = await ShikiEditor.create({
   },
 });
 ```
+
+说明：当传入 `highlighter` 时，`resolveLanguage/resolveTheme` 会被忽略；动态切换语言应通过重新提供对应 highlighter（例如 `manager.getHighlighter(lang)` + `editor.render({ lang, highlighter })`）。
 
 ## 精细打包注意事项
 

@@ -7,8 +7,8 @@ import type { Highlighter, ShikiToCMOptions } from './types/types';
 import { toStyleObject } from './utils';
 import { Base, type InitShikiFn } from './base';
 import {
-  getPrimaryRuntimeLanguage,
-  getRuntimeLanguageLabel,
+  getPrimaryRuntimeLang,
+  getRuntimeLangLabel,
 } from './language-normalize';
 
 // Decode vscode-textmate encoded token metadata without importing
@@ -167,7 +167,7 @@ export class ShikiHighlighter extends Base {
       return { produced, nextFrom };
     }
 
-    const lang = getPrimaryRuntimeLanguage(this.configs.lang);
+    const lang = getPrimaryRuntimeLang(this.configs.lang);
     const themeAlias = this.currentTheme;
     const internal = this.internal;
 
@@ -275,7 +275,7 @@ export class ShikiHighlighter extends Base {
     // 3. Tokenize visible lines and emit decorations
     let cmClasses: Record<string, string> = {};
     this.view!.dom.classList.toggle(
-      'lang-' + getRuntimeLanguageLabel(lang).replace(/[^\w-]/g, '_'),
+      'lang-' + getRuntimeLangLabel(lang).replace(/[^\w-]/g, '_'),
       true,
     );
 

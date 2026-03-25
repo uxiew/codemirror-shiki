@@ -2,10 +2,7 @@ import type { LanguageInput } from './types/shiki.types';
 
 export type RuntimeLanguageInput = string | LanguageInput;
 
-function pushNormalized(
-  value: unknown,
-  output: RuntimeLanguageInput[],
-): void {
+function pushNormalized(value: unknown, output: RuntimeLanguageInput[]): void {
   if (value == null) return;
 
   if (Array.isArray(value)) {
@@ -29,9 +26,7 @@ function pushNormalized(
  * Normalize unknown language inputs to runtime-supported values.
  * Supports string/object and nested array forms.
  */
-export function normalizeRuntimeLanguages(
-  value: unknown,
-): RuntimeLanguageInput[] {
+export function normalizeRuntimeLangs(value: unknown): RuntimeLanguageInput[] {
   const output: RuntimeLanguageInput[] = [];
   pushNormalized(value, output);
   return output;
@@ -40,16 +35,16 @@ export function normalizeRuntimeLanguages(
 /**
  * Pick the primary language from normalized runtime language inputs.
  */
-export function getPrimaryRuntimeLanguage(
+export function getPrimaryRuntimeLang(
   value: unknown,
 ): RuntimeLanguageInput | undefined {
-  return normalizeRuntimeLanguages(value)[0];
+  return normalizeRuntimeLangs(value)[0];
 }
 
 /**
  * Human-readable language label for logs/debugging.
  */
-export function getRuntimeLanguageLabel(value: unknown): string {
+export function getRuntimeLangLabel(value: unknown): string {
   if (typeof value === 'string') return value;
   if (value && typeof value === 'object') {
     const name = (value as any).name;
@@ -61,7 +56,7 @@ export function getRuntimeLanguageLabel(value: unknown): string {
     return 'custom-language';
   }
   if (Array.isArray(value)) {
-    const labels = normalizeRuntimeLanguages(value).map(getRuntimeLanguageLabel);
+    const labels = normalizeRuntimeLangs(value).map(getRuntimeLangLabel);
     return labels.join(', ') || 'unknown-language';
   }
   return 'unknown-language';

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  createCachedLanguageResolver,
+  createCachedLangResolver,
   createCachedThemeResolver,
 } from '../src/resolvers';
 
@@ -9,12 +9,12 @@ describe('resolver helpers', () => {
     const javascriptLoader = vi.fn(async () => ({
       default: [{ name: 'javascript' }],
     }));
-    const resolveLanguage = createCachedLanguageResolver({
+    const resolveLang = createCachedLangResolver({
       javascript: javascriptLoader,
     });
 
-    const first = await resolveLanguage('javascript');
-    const second = await resolveLanguage('javascript');
+    const first = await resolveLang('javascript');
+    const second = await resolveLang('javascript');
 
     expect(javascriptLoader).toHaveBeenCalledTimes(1);
     expect(first).toEqual([{ name: 'javascript' }]);

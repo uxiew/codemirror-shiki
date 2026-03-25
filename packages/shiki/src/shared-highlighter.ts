@@ -1,8 +1,8 @@
 import type { Options } from './types/types';
 import type { LanguageInput } from './types/shiki.types';
 import {
-  getRuntimeLanguageLabel,
-  normalizeRuntimeLanguages,
+  getRuntimeLangLabel,
+  normalizeRuntimeLangs,
 } from './language-normalize';
 import { getVersionGuardHint } from './compat';
 
@@ -25,20 +25,24 @@ async function isLanguageReady(
   }
 }
 
+/**
+ * 动态加载语言
+ * @param options
+ * @param highlighter
+ * @param languageName
+ * @returns
+ */
 async function loadResolvedLanguages(
   options: ShikiOptions,
   highlighter: any,
   languageName: string,
 ): Promise<boolean> {
-  if (
-    !options.resolveLanguage ||
-    typeof highlighter.loadLanguage !== 'function'
-  ) {
+  if (!options.resolveLang || typeof highlighter.loadLanguage !== 'function') {
     return false;
   }
 
-  const resolved = await Promise.resolve(options.resolveLanguage(languageName));
-  const languageObjects = normalizeRuntimeLanguages(resolved).filter(
+  const resolved = await Promise.resolve(options.resolveLang(languageName));
+  const languageObjects = normalizeRuntimeLangs(resolved).filter(
     (lang): lang is LanguageInput => typeof lang !== 'string',
   );
   if (languageObjects.length === 0) {
@@ -69,8 +73,8 @@ export async function syncSharedHighlighter(options: ShikiOptions) {
 
   // For shared highlighter instances, eagerly load runtime lang/theme updates.
   if (options.lang && typeof highlighter.loadLanguage === 'function') {
-    const runtimeLanguages = normalizeRuntimeLanguages(options.lang);
-    const languageObjects = runtimeLanguages.filter(
+    const runtimeLangs = normalizeRuntimeLangs(options.lang);
+    const languageObjects = runtimeLangs.filter(
       (lang) => typeof lang !== 'string',
     );
     const languageNames = runtimeLanguages.filter(
@@ -84,7 +88,7 @@ export async function syncSharedHighlighter(options: ShikiOptions) {
             if (options.warnings) {
               console.warn(
                 `[@cmshiki/shiki] Failed to load language objects on shared highlighter: ${languageObjects
-                  .map((lang) => getRuntimeLanguageLabel(lang))
+                  .map((lang) => getRuntimeLangLabel(lang))
                   .join(', ')}`,
                 error,
               );

@@ -8,24 +8,57 @@ import {
 } from '@cmshiki/shiki/core';
 import { createHighlighterCore } from 'shiki/core';
 import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
-import javascript from '@shikijs/langs/javascript';
-import githubDark from '@shikijs/themes/github-dark';
-import githubLight from '@shikijs/themes/github-light';
 import { languageSamples, mountHarness } from './ui';
 
 const { editorEl, langSelect, themeSelect } = mountHarness(
-  'Core Resolve (No Cache)',
-  '使用 @cmshiki/shiki/core + resolveLanguage/resolveTheme（不使用缓存 API）',
+  'Core Dynamic (No Cache)',
+  '使用 @cmshiki/shiki/core + 手动动态创建 highlighter（不使用缓存）',
 );
 
-const highlighter = await createHighlighterCore({
-  langs: [javascript],
-  themes: [githubDark, githubLight],
-  engine: createJavaScriptRegexEngine(),
-});
+const engine = createJavaScriptRegexEngine({ target: 'ES2018' });
+
+const languageLoaders = {
+  javascript: () => import('@shikijs/langs/javascript'),
+  typescript: () => import('@shikijs/langs/typescript'),
+  json: () => import('@shikijs/langs/json'),
+} as const;
+
+const themeLoaders = {
+  'github-dark': () => import('@shikijs/themes/github-dark'),
+  'github-light': () => import('@shikijs/themes/github-light'),
+} as const;
+
+const themesPromise = Promise.all(
+  Object.values(themeLoaders).map((loader) =>
+    loader().then((m) => m.default ?? m),
+  ),
+);
+
+async function loadLang(lang: string) {
+  const loader =
+    languageLoaders[lang as keyof typeof languageLoaders] ||
+    languageLoaders.javascript;
+  const mod = await loader();
+  return mod.default ?? mod;
+}
+
+async function createHighlighterForLang(lang: string) {
+  const [langInput, themes] = await Promise.all([
+    loadLang(lang),
+    themesPromise,
+  ]);
+  return createHighlighterCore({
+    langs: [langInput],
+    themes,
+    engine,
+  });
+}
+
+let languageRequestId = 0;
+const initialHighlighter = await createHighlighterForLang('javascript');
 
 const { shiki, getTheme } = await shikiToCodeMirror({
-  highlighter,
+  highlighter: initialHighlighter,
   lang: 'javascript',
   themes: {
     dark: 'github-dark',
@@ -34,21 +67,6 @@ const { shiki, getTheme } = await shikiToCodeMirror({
   defaultColor: 'dark',
   themeStyle: 'cm',
   warnings: true,
-  resolveLanguage: async (lang) => {
-    if (lang === 'javascript')
-      return (await import('@shikijs/langs/javascript')).default;
-    if (lang === 'typescript')
-      return (await import('@shikijs/langs/typescript')).default;
-    if (lang === 'json') return (await import('@shikijs/langs/json')).default;
-    return undefined;
-  },
-  resolveTheme: async (theme) => {
-    if (theme === 'github-dark')
-      return (await import('@shikijs/themes/github-dark')).default;
-    if (theme === 'github-light')
-      return (await import('@shikijs/themes/github-light')).default;
-    return undefined;
-  },
 });
 
 const view = new EditorView({
@@ -59,12 +77,16 @@ const view = new EditorView({
   }),
 });
 
-langSelect.addEventListener('change', () => {
+langSelect.addEventListener('change', async () => {
   const lang = langSelect.value;
   const nextDoc = languageSamples[lang] ?? languageSamples.javascript;
+  const requestId = ++languageRequestId;
+  const highlighter = await createHighlighterForLang(lang);
+  if (requestId !== languageRequestId) return;
+
   view.dispatch({
     changes: { from: 0, to: view.state.doc.length, insert: nextDoc },
-    effects: updateEffect.of({ lang }),
+    effects: updateEffect.of({ lang, highlighter }),
   });
 });
 

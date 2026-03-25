@@ -10,7 +10,7 @@ import { languageSamples, mountHarness } from './ui';
 
 const { editorEl, langSelect, themeSelect } = mountHarness(
   'Default Entry Dynamic Loading',
-  '使用 @cmshiki/shiki（默认入口），不传 resolveLanguage/resolveTheme',
+  '使用 @cmshiki/shiki（默认入口），不传 resolveLang/resolveTheme',
 );
 
 const { shiki, getTheme } = await shikiToCodeMirror({

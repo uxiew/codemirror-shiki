@@ -1,5 +1,5 @@
 import type { LanguageInput, ThemeInput, Awaitable } from './types/shiki.types';
-import { normalizeRuntimeLanguages } from './language-normalize';
+import { normalizeRuntimeLangs } from './language-normalize';
 import type { ShikiInternal } from './types/shiki.types';
 import { createHighlighterCore } from 'shiki/core';
 import type { EngineOption } from './types/types';
@@ -7,7 +7,7 @@ import { resolveRegexEngine } from './engine';
 
 type MaybeDefault<T> = T | { default: T };
 
-export type LanguageLoader = () => Awaitable<
+export type LangLoader = () => Awaitable<
   MaybeDefault<LanguageInput | ReadonlyArray<LanguageInput>>
 >;
 
@@ -31,14 +31,12 @@ function unwrapModuleDefault<T>(value: MaybeDefault<T>): T {
  * Create a cached language resolver from dynamic import loaders.
  *
  * @example
- * const resolveLanguage = createCachedLanguageResolver({
+ * const resolveLang = createCachedLangResolver({
  *   javascript: () => import('@shikijs/langs/javascript'),
  *   json: () => import('@shikijs/langs/json'),
  * })
  */
-export function createCachedLanguageResolver(
-  loaders: Record<string, LanguageLoader>,
-) {
+export function createCachedLangResolver(loaders: Record<string, LangLoader>) {
   const cache = new Map<string, Promise<LanguageInput[]>>();
 
   return async (lang: string) => {
@@ -53,7 +51,7 @@ export function createCachedLanguageResolver(
         key,
         Promise.resolve(loader()).then((loaded) => {
           const unwrapped = unwrapModuleDefault(loaded as any);
-          return normalizeRuntimeLanguages(unwrapped as any).filter(
+          return normalizeRuntimeLangs(unwrapped as any).filter(
             (item): item is LanguageInput => typeof item !== 'string',
           );
         }),
@@ -102,7 +100,10 @@ export interface SharedHighlighterManagerOptions<
   LangKey extends string = string,
   ThemeKey extends string = string,
 > {
-  languageLoaders: Record<LangKey, LanguageLoader>;
+  /**
+   * Preferred field name.
+   */
+  langLoaders?: Record<LangKey, LangLoader>;
   themeLoaders: Record<ThemeKey, ThemeLoader>;
   /**
    * Regex engine used by the shared highlighter.
@@ -111,15 +112,20 @@ export interface SharedHighlighterManagerOptions<
    * `shiki/core`, where callers explicitly control the engine/runtime tradeoff.
    */
   engine: RuntimeEngineOption;
-  preloadLanguage?: LangKey;
+  preloadLangs?: LangKey;
   preloadThemes: readonly ThemeKey[];
   langAlias?: Record<string, string>;
   warnings?: boolean;
 }
 
 export interface SharedHighlighterManager {
-  getHighlighter: () => Promise<ShikiInternal<never, never>>;
-  resolveLanguage: ReturnType<typeof createCachedLanguageResolver>;
+  /**
+   * Get a highlighter instance.
+   * - no arg: return shared/preloaded instance
+   * - with lang: return language-scoped cached instance
+   */
+  getHighlighter: (lang?: string) => Promise<ShikiInternal<never, never>>;
+  resolveLang: ReturnType<typeof createCachedLangResolver>;
   resolveTheme: ReturnType<typeof createCachedThemeResolver>;
 }
 
@@ -131,28 +137,41 @@ export interface SharedHighlighterManager {
  * - one shared highlighter promise (`getHighlighter`)
  * - shared highlighter initialization for fine-grained bundling
  */
-export function createSharedHighlighterManager<
+export function createHighlighterManager<
   LangKey extends string = string,
   ThemeKey extends string = string,
 >(
   options: SharedHighlighterManagerOptions<LangKey, ThemeKey>,
 ): SharedHighlighterManager {
   const warnings = options.warnings ?? true;
-  const resolveLanguage = createCachedLanguageResolver(
-    options.languageLoaders as Record<string, LanguageLoader>,
+  const langLoaders = options.langLoaders || ({} as any);
+
+  const resolveLang = createCachedLangResolver(
+    langLoaders as Record<string, LangLoader>,
   );
   const resolveTheme = createCachedThemeResolver(
     options.themeLoaders as Record<string, ThemeLoader>,
   );
 
-  let highlighterPromise: Promise<ShikiInternal<never, never>> | null = null;
+  let sharedHighlighterPromise: Promise<ShikiInternal<never, never>> | null =
+    null;
+  const perLanguageHighlighterCache = new Map<
+    string,
+    Promise<ShikiInternal<never, never>>
+  >();
+  const resolvedThemesPromise = Promise.all(
+    options.preloadThemes.map((themeKey) =>
+      resolveThemeForPreload(String(themeKey)),
+    ),
+  );
+  const resolvedEnginePromise = resolveRegexEngine(options.engine);
 
-  async function resolveLanguageForPreload(lang: string) {
-    const languages = await Promise.resolve(resolveLanguage(lang));
+  async function resolveLangForPreload(lang: string) {
+    const languages = await Promise.resolve(resolveLang(lang));
     if (!languages || languages.length === 0) {
       throw new Error(
         `[@cmshiki/shiki] Failed to preload language "${lang}". ` +
-          'Please check your languageLoaders map.',
+          'Please check your langLoaders map.',
       );
     }
     return languages;
@@ -169,15 +188,31 @@ export function createSharedHighlighterManager<
     return themeInput;
   }
 
-  async function getHighlighter() {
-    if (!highlighterPromise) {
-      highlighterPromise = (async () => {
+  async function createHighlighterForLang(lang: string) {
+    const [langs, themes, engine] = await Promise.all([
+      resolveLangForPreload(lang),
+      resolvedThemesPromise,
+      resolvedEnginePromise,
+    ]);
+
+    return createHighlighterCore({
+      langs,
+      themes,
+      langAlias: options.langAlias,
+      engine,
+      warnings,
+    });
+  }
+
+  async function getSharedHighlighter() {
+    if (!sharedHighlighterPromise) {
+      sharedHighlighterPromise = (async () => {
         const preloadLanguage =
-          options.preloadLanguage ||
-          (Object.keys(options.languageLoaders)[0] as LangKey | undefined);
-        if (!preloadLanguage) {
+          options.preloadLangs ||
+          (Object.keys(langLoaders)[0] as LangKey | undefined);
+        if (!preloadLanguage || String(preloadLanguage).trim().length === 0) {
           throw new Error(
-            '[@cmshiki/shiki] `preloadLanguage` is missing and languageLoaders is empty.',
+            '[@cmshiki/shiki] `preloadLangs` is missing and langLoaders is empty.',
           );
         }
         if (!options.preloadThemes || options.preloadThemes.length === 0) {
@@ -190,32 +225,28 @@ export function createSharedHighlighterManager<
             '[@cmshiki/shiki] `engine` is required in createSharedHighlighterManager().',
           );
         }
-        const [preloadedLangs, preloadedThemes, engine] = await Promise.all([
-          resolveLanguageForPreload(String(preloadLanguage)),
-          Promise.all(
-            options.preloadThemes.map((themeKey) =>
-              resolveThemeForPreload(String(themeKey)),
-            ),
-          ),
-          resolveRegexEngine(options.engine),
-        ]);
-
-        return createHighlighterCore({
-          langs: preloadedLangs,
-          themes: preloadedThemes,
-          langAlias: options.langAlias,
-          engine,
-          warnings,
-        });
+        return createHighlighterForLang(String(preloadLanguage));
       })();
     }
 
-    return highlighterPromise;
+    return sharedHighlighterPromise;
+  }
+
+  async function getHighlighter(lang?: string) {
+    const key = String(lang || '')
+      .trim()
+      .toLowerCase();
+    if (!key) return getSharedHighlighter();
+
+    if (!perLanguageHighlighterCache.has(key)) {
+      perLanguageHighlighterCache.set(key, createHighlighterForLang(key));
+    }
+    return perLanguageHighlighterCache.get(key)!;
   }
 
   return {
     getHighlighter,
-    resolveLanguage,
+    resolveLang,
     resolveTheme,
   };
 }

@@ -71,26 +71,26 @@ view.dispatch({
   - `{ type: "javascript", options: { target: "ES2018" } }`：显式指定兼容目标
   - 自定义 `RegexEngine`
 - `highlighter`：预初始化的 Shiki highlighter（传入后跳过内部初始化）
-  - 当使用 shared highlighter 时，库会优先加载语言对象；字符串语言加载失败会降级为告警，不阻塞编辑器渲染
-- `resolveLanguage`：语言字符串无法直接加载时的兜底解析器（用于动态 import 语言对象）
-- `resolveTheme`：主题字符串无法直接加载时的兜底解析器（用于动态 import 主题对象）
+  - 推荐配合 `createHighlighterManager().getHighlighter(lang)` 做动态语言切换
+- `resolveLanguage`：未传 `highlighter` 时，语言字符串无法直接加载的兜底解析器（动态 import）
+- `resolveTheme`：未传 `highlighter` 时，主题字符串无法直接加载的兜底解析器（动态 import）
 - `versionGuard`：共享 highlighter 版本/形态护栏，默认 `true`
 
 ## “动态语言 + 多编辑器 + 懒加载”场景
 
-- `createCachedLanguageResolver(loaders)`：
-  - 为语言动态 import 提供缓存 resolver
-  - 避免业务重复写 `Map + import + default 解包` 样板
-- `createCachedThemeResolver(loaders)`：
-  - 为主题动态 import 提供缓存 resolver
-- `createSharedHighlighterManager(options)`：
-  - 底层统一托管 `getHighlighter()`
+- `createHighlighterManager(options)`：
+  - 底层统一托管 `getHighlighter(lang?)`
   - 同时暴露 `resolveLanguage` / `resolveTheme`
-  - 适合 `@cmshiki/shiki/core` + 精细打包场景
+  - 适合 `@cmshiki/shiki/core` + 精细打包场景（推荐入口）
+
+低阶可选 API（按需使用）：
+
+- `createCachedLangResolver(loaders)`：语言动态 import 缓存 resolver
+- `createCachedThemeResolver(loaders)`：主题动态 import 缓存 resolver
 
 ## 缓存方案使用场景
 
-建议使用缓存 API（`createCached*` / `createSharedHighlighterManager`）的场景：
+建议使用 `createHighlighterManager` 的场景：
 
 - 多编辑器并行挂载（同语言/主题会被重复请求）
 - 语言或主题会频繁切换
@@ -105,13 +105,12 @@ view.dispatch({
 关键点：
 
 - 不使用缓存 API 也能动态按需加载
-- 缓存 API 主要解决“重复加载、并发去重、初始化抖动”，不是动态加载的前置条件
+- manager 主要解决“重复加载、并发去重、初始化抖动”，不是动态加载的前置条件
 
 无缓存动态加载示例（可用）：
 
 ```ts
 const { shiki } = await shikiToCodeMirror({
-  highlighter,
   lang: "typescript",
   themes: { dark: "github-dark", light: "github-light" },
   resolveLanguage: async (lang) => {
@@ -129,44 +128,40 @@ const { shiki } = await shikiToCodeMirror({
 
 ## API 说明
 
-### `createCachedLanguageResolver`
+### `createHighlighterManager`
 
 ```ts
-function createCachedLanguageResolver(
-  loaders: Record<string, () => Promise<any>>,
-): (lang: string) => Promise<LanguageInput[] | undefined>;
-```
-
-### `createCachedThemeResolver`
-
-```ts
-function createCachedThemeResolver(
-  loaders: Record<string, () => Promise<any>>,
-): (theme: string) => Promise<ThemeInput | undefined>;
-```
-
-### `createSharedHighlighterManager`
-
-```ts
-function createSharedHighlighterManager(options: {
-  languageLoaders: Record<string, () => Promise<any>>;
+function createHighlighterManager(options: {
+  langLoaders?: Record<string, () => Promise<any>>;
   themeLoaders: Record<string, () => Promise<any>>;
-  preloadLanguage?: string;
+  preloadLang?: string;
   preloadThemes: readonly string[];
   langAlias?: Record<string, string>;
   engine: "oniguruma" | "javascript" | { type: "javascript"; options?: object } | RegexEngine | Promise<RegexEngine>;
   warnings?: boolean;
 }): {
-  getHighlighter: () => Promise<ShikiInternal<never, never>>;
-  resolveLanguage: (lang: string) => Promise<LanguageInput[] | undefined>;
+  getHighlighter: (lang?: string) => Promise<ShikiInternal<never, never>>;
+  resolveLang: (lang: string) => Promise<LanguageInput[] | undefined>;
   resolveTheme: (theme: string) => Promise<ThemeInput | undefined>;
 };
 ```
 
+### 低阶缓存 API（可选）
+
+```ts
+function createCachedLangResolver(
+  loaders: Record<string, () => Promise<any>>,
+): (lang: string) => Promise<LanguageInput[] | undefined>;
+
+function createCachedThemeResolver(
+  loaders: Record<string, () => Promise<any>>,
+): (theme: string) => Promise<ThemeInput | undefined>;
+```
+
 说明：
 
-- `createSharedHighlighterManager` 现在要求显式传 `engine`。
-- 这是为了对齐 `shiki/core` 的 fine-grained 语义，不再由 helper 隐式替你决定引擎。
+- `createHighlighterManager` 现在要求显式传 `engine`。
+- 这是为了对齐 `shiki/core` 的 fine-grained 语义。
 - `preloadThemes` 至少 1 项；建议把默认展示主题都预热进去。
 
 ## `theme` / `themes` / `defaultColor` 关系说明
@@ -305,45 +300,17 @@ JavaScript 引擎运行时兼容：
 - 底层自动检测 `RegExp` 是否支持 `v/d`。  
 - 不支持时，显式传兼容目标：`engine: { type: "javascript", options: { target: "ES2018" } }`。
 
-## 4) 兜底解析器（减少业务样板代码）
+## 4) 动态加载推荐（manager 优先）
 
-当你在 `core` 模式下做精细打包时，通常会写大量动态 import 和缓存逻辑。现在可以通过 `resolveLanguage` / `resolveTheme` 把兜底逻辑交给底层：
-
-```ts
-import {
-  shikiToCodeMirror,
-  createCachedLanguageResolver,
-  createCachedThemeResolver,
-} from "@cmshiki/shiki/core";
-
-const resolveLanguage = createCachedLanguageResolver({
-  javascript: () => import("@shikijs/langs/javascript"),
-  json: () => import("@shikijs/langs/json"),
-});
-
-const resolveTheme = createCachedThemeResolver({
-  "github-dark": () => import("@shikijs/themes/github-dark"),
-  "github-light": () => import("@shikijs/themes/github-light"),
-});
-
-const { shiki } = await shikiToCodeMirror({
-  highlighter,
-  lang: "javascript",
-  themes: { dark: "github-dark", light: "github-light" },
-  resolveLanguage,
-  resolveTheme,
-});
-```
-
-如果你希望把业务里的 `getHighlighter()` 也下沉到底层，可以直接用：
+`core` 模式推荐使用 `createHighlighterManager`，按语言获取 highlighter：
 
 ```ts
 import {
-  createSharedHighlighterManager,
+  createHighlighterManager,
   shikiToCodeMirror,
 } from "@cmshiki/shiki/core";
 
-const manager = createSharedHighlighterManager({
+const manager = createHighlighterManager({
   languageLoaders: {
     javascript: () => import("@shikijs/langs/javascript"),
     typescript: () => import("@shikijs/langs/typescript"),
@@ -358,14 +325,44 @@ const manager = createSharedHighlighterManager({
   engine: "oniguruma",
 });
 
-const highlighter = await manager.getHighlighter();
+const highlighter = await manager.getHighlighter("typescript");
 
 const { shiki } = await shikiToCodeMirror({
   highlighter,
   lang: "typescript",
   themes: { dark: "github-dark", light: "github-light" },
-  resolveLanguage: manager.resolveLanguage,
-  resolveTheme: manager.resolveTheme,
+});
+```
+
+说明：
+
+- 传入 `highlighter` 时，`resolveLanguage/resolveTheme` 会被忽略。
+- 如果要切换语言，请重新获取对应 highlighter：`manager.getHighlighter(lang)`。
+
+如果你不传 `highlighter`（默认入口），可以继续用 resolver 兜底：
+
+```ts
+import {
+  shikiToCodeMirror,
+  createCachedLangResolver,
+  createCachedThemeResolver,
+} from "@cmshiki/shiki";
+
+const resolveLang = createCachedLangResolver({
+    javascript: () => import("@shikijs/langs/javascript"),
+    json: () => import("@shikijs/langs/json"),
+});
+
+const resolveTheme = createCachedThemeResolver({
+  "github-dark": () => import("@shikijs/themes/github-dark"),
+  "github-light": () => import("@shikijs/themes/github-light"),
+});
+
+const { shiki } = await shikiToCodeMirror({
+  lang: "javascript",
+  themes: { dark: "github-dark", light: "github-light" },
+  resolveLang,
+  resolveTheme,
 });
 ```
 

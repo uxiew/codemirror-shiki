@@ -50,7 +50,7 @@ export type EngineOption =
   | JavaScriptEngineOption
   | Awaitable<RegexEngine>;
 
-export type ResolveLanguageFn = (
+export type ResolveLangFn = (
   lang: string,
 ) => Awaitable<LanguageInput | ReadonlyArray<LanguageInput> | undefined | null>;
 
@@ -169,13 +169,18 @@ export interface Options<
   highlighter?: Highlighter;
   /**
    * Resolve and return language input(s) when a language string is not bundled
-   * or cannot be loaded directly on a shared highlighter.
+   * during internal highlighter initialization.
+   *
+   * Note: when `highlighter` is provided, this resolver is ignored.
    *
    * Useful for fine-grained dynamic imports in business apps.
    */
-  resolveLanguage?: ResolveLanguageFn;
+  resolveLang?: ResolveLangFn;
   /**
-   * Resolve and return theme input when a theme string cannot be loaded directly.
+   * Resolve and return theme input when a theme string cannot be loaded directly
+   * during internal highlighter initialization.
+   *
+   * Note: when `highlighter` is provided, this resolver is ignored.
    *
    * Useful for fine-grained dynamic imports in business apps.
    */
@@ -198,7 +203,7 @@ type UnknownOptions =
   | 'grammarState'
   | 'grammarContextCode'
   | 'highlighter'
-  | 'resolveLanguage'
+  | 'resolveLang'
   | 'resolveTheme'
   | 'versionGuard';
 

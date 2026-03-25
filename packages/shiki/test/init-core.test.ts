@@ -12,7 +12,7 @@ describe('initShikiCore', () => {
     ).rejects.toThrow(/`highlighter` is required/i);
   });
 
-  it('should sync language/theme on shared highlighter', async () => {
+  it('should return provided highlighter as-is', async () => {
     const loadLanguage = vi.fn(async () => {});
     const loadTheme = vi.fn(async () => {});
     const highlighter = {
@@ -34,37 +34,35 @@ describe('initShikiCore', () => {
     } as any);
 
     expect(result).toBe(highlighter);
-    expect(loadLanguage).toHaveBeenCalledWith('typescript');
-    expect(loadTheme).toHaveBeenCalledTimes(2);
+    expect(loadLanguage).not.toHaveBeenCalled();
+    expect(loadTheme).not.toHaveBeenCalled();
   });
 
-  it('should normalize array language inputs on shared highlighter', async () => {
-    const loadLanguage = vi.fn(async () => {});
-    const loadTheme = vi.fn(async () => {});
+  it('should warn when resolveLang/resolveTheme are passed with shared highlighter', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const highlighter = {
-      loadLanguage,
-      loadTheme,
       getLanguage: vi.fn(() => undefined),
       getTheme: vi.fn(() => ({ fg: '#fff', bg: '#000' })),
       setTheme: vi.fn(() => ({ colorMap: ['#000', '#fff'] })),
     };
 
-    const jsLang = { name: 'javascript' } as any;
-    const tsLang = { name: 'typescript' } as any;
-
     const result = await initShikiCore({
       highlighter: highlighter as any,
-      lang: [jsLang, tsLang] as any,
+      lang: 'typescript',
       themes: {
         light: 'github-light',
         dark: 'github-dark',
       },
+      resolveLang: async () => ({ name: 'typescript' }) as any,
+      resolveTheme: async () => ({ name: 'github-dark' }) as any,
       warnings: true,
     } as any);
 
     expect(result).toBe(highlighter);
-    expect(loadLanguage).toHaveBeenCalledWith(jsLang, tsLang);
-    expect(loadTheme).toHaveBeenCalledTimes(2);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('resolveLang/resolveTheme'),
+    );
+    warn.mockRestore();
   });
 
   it('should fail fast for incompatible shared highlighter by default', async () => {
@@ -103,7 +101,7 @@ describe('initShikiCore', () => {
     } as any);
 
     expect(result).toBe(highlighter);
-    expect(loadLanguage).toHaveBeenCalledWith('typescript');
-    expect(loadTheme).toHaveBeenCalledTimes(2);
+    expect(loadLanguage).not.toHaveBeenCalled();
+    expect(loadTheme).not.toHaveBeenCalled();
   });
 });

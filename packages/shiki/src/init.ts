@@ -1,10 +1,9 @@
 import { type ThemeInput, type LanguageInput } from '@shikijs/core';
 import { createHighlighterCore } from 'shiki/core';
 import type { Options } from './types/types';
-import { syncSharedHighlighter } from './shared-highlighter';
 import {
-  getRuntimeLanguageLabel,
-  normalizeRuntimeLanguages,
+  getRuntimeLangLabel,
+  normalizeRuntimeLangs,
 } from './language-normalize';
 import { assertCompatibleHighlighter } from './compat';
 import { resolveRegexEngine } from './engine';
@@ -19,6 +18,19 @@ async function getEngine(engineOption: Options['engine']) {
   return resolveRegexEngine(engineOption, 'oniguruma');
 }
 
+function warnIgnoredResolvers(
+  options: ShikiOptions,
+  source: '@cmshiki/shiki' | '@cmshiki/shiki/core',
+) {
+  if (!options.warnings) return;
+  if (!options.resolveLang && !options.resolveTheme) return;
+
+  console.warn(
+    `[${source}] \`resolveLanguage/resolveTheme\` are ignored when \`highlighter\` is provided. ` +
+      'Use `createSharedHighlighterManager().getHighlighter(lang)` to switch languages dynamically.',
+  );
+}
+
 export async function initShiki(options: ShikiOptions) {
   // If user provides a pre-initialized highlighter, use it directly (zero delay)
   if (options.highlighter) {
@@ -28,7 +40,8 @@ export async function initShiki(options: ShikiOptions) {
       options.warnings,
       options.versionGuard !== false,
     );
-    return syncSharedHighlighter(options);
+    warnIgnoredResolvers(options, '@cmshiki/shiki');
+    return options.highlighter;
   }
 
   if (!options.themes || Object.keys(options.themes).length === 0) {
@@ -99,9 +112,9 @@ export async function initShiki(options: ShikiOptions) {
       }
     }
     if (!loader) {
-      if (options.resolveLanguage) {
-        const resolved = await Promise.resolve(options.resolveLanguage(lang));
-        const runtimeLanguages = normalizeRuntimeLanguages(resolved).filter(
+      if (options.resolveLang) {
+        const resolved = await Promise.resolve(options.resolveLang(lang));
+        const runtimeLanguages = normalizeRuntimeLangs(resolved).filter(
           (item): item is LanguageInput => typeof item !== 'string',
         );
         if (runtimeLanguages.length > 0) {
@@ -134,7 +147,7 @@ export async function initShiki(options: ShikiOptions) {
   }
 
   if (options.lang) {
-    const langs = normalizeRuntimeLanguages(options.lang);
+    const langs = normalizeRuntimeLangs(options.lang);
     for (const lang of langs) {
       await loadLangs(lang);
     }
@@ -149,7 +162,7 @@ export async function initShiki(options: ShikiOptions) {
 
   if (resolvedLangs.length === 0 && options.warnings) {
     console.warn(
-      `[@cmshiki/shiki] No runtime language loaded for \`${getRuntimeLanguageLabel(
+      `[@cmshiki/shiki] No runtime language loaded for \`${getRuntimeLangLabel(
         options.lang,
       )}\`.`,
     );

@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { initShiki } from '../src/init';
 
 describe('initShiki resolvers', () => {
-  it('should use resolveLanguage and resolveTheme when bundled entries are missing', async () => {
-    const resolveLanguage = vi.fn(async (lang: string) => {
+  it('should use resolveLang and resolveTheme when bundled entries are missing', async () => {
+    const resolveLang = vi.fn(async (lang: string) => {
       if (lang !== 'custom-js') return undefined;
       const { bundledLanguages } = await import('shiki');
       const mod = await bundledLanguages.javascript();
@@ -31,14 +31,14 @@ describe('initShiki resolvers', () => {
         light: 'custom-light',
       },
       defaultColor: 'dark',
-      resolveLanguage,
+      resolveLang,
       resolveTheme,
       warnings: true,
       themeStyle: 'cm',
       engine: 'javascript',
     } as any);
 
-    expect(resolveLanguage).toHaveBeenCalledWith('custom-js');
+    expect(resolveLang).toHaveBeenCalledWith('custom-js');
     expect(resolveTheme).toHaveBeenCalledWith('custom-dark');
     expect(resolveTheme).toHaveBeenCalledWith('custom-light');
     expect(highlighter.getTheme('github-dark')).toBeTruthy();
