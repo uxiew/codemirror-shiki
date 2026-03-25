@@ -200,6 +200,7 @@ const manager = createSharedHighlighterManager({
   },
   preloadLanguage: "javascript",
   preloadThemes: ["github-dark", "github-light"],
+  engine: "oniguruma",
 });
 
 const editor = await ShikiEditor.create({
@@ -215,7 +216,7 @@ const editor = await ShikiEditor.create({
 ```
 
 建议：`shiki`、`@shikijs/langs`、`@shikijs/themes` 保持同 major，避免运行时语法资源不兼容。
-说明：`createSharedHighlighterManager` 默认使用 JavaScript 引擎；如需自定义再显式传 `engine`。
+说明：`createSharedHighlighterManager` 现在要求显式传 `engine`，以对齐 `shiki/core` 的 fine-grained 语义。
 
 ## 缓存方案与非缓存方案
 

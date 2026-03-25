@@ -11,6 +11,7 @@ import type {
   Awaitable,
   ThemeInput,
 } from './shiki.types';
+import type { JavaScriptRegexEngineOptions } from 'shiki/engine/javascript';
 
 export interface BaseOptions {
   /**
@@ -37,8 +38,17 @@ export type ThemeKey<TThemes extends ThemeRegistry = ThemeRegistry> = Extract<
   string
 >;
 
+export interface JavaScriptEngineOption {
+  type: 'javascript';
+  options?: JavaScriptRegexEngineOptions;
+}
+
 /** Regex engine option for Shiki tokenization */
-export type EngineOption = 'javascript' | 'oniguruma' | Awaitable<RegexEngine>;
+export type EngineOption =
+  | 'javascript'
+  | 'oniguruma'
+  | JavaScriptEngineOption
+  | Awaitable<RegexEngine>;
 
 export type ResolveLanguageFn = (
   lang: string,
@@ -123,8 +133,9 @@ export interface Options<
   warnings?: boolean;
   /**
    * Regex engine to use for tokenization.
-   * - Pass `'javascript'` to use the JavaScript RegExp engine (faster startup, smaller bundle)
+   * - Pass `'javascript'` to use the JavaScript RegExp engine with Shiki defaults
    * - Pass `'oniguruma'` to use the Oniguruma engine via WASM (better compatibility, default)
+   * - Pass `{ type: 'javascript', options: ... }` for explicit JavaScript engine options
    * - Pass a custom RegexEngine for full control
    * @default 'oniguruma'
    */

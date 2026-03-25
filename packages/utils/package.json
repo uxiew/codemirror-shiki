@@ -42,10 +42,11 @@
     "@codemirror/language": "catalog:",
     "@codemirror/state": "catalog:",
     "@codemirror/view": "catalog:",
-    "@shikijs/core": "catalog:",
+    "@shikijs/core": "catalog:"
+  },
+  "devDependencies": {
     "style-mod": "catalog:"
   },
-  "devDependencies": {},
   "peerDependencies": {},
   "optionalDependencies": {}
 }

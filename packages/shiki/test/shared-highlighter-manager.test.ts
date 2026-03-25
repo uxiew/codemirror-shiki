@@ -18,6 +18,7 @@ describe('createSharedHighlighterManager', () => {
       },
       preloadLanguage: 'javascript',
       preloadThemes: ['github-dark', 'github-light'],
+      engine: 'oniguruma',
       warnings: true,
     });
 

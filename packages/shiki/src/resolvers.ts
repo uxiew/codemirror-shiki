@@ -1,8 +1,9 @@
 import type { LanguageInput, ThemeInput, Awaitable } from './types/shiki.types';
 import { normalizeRuntimeLanguages } from './language-normalize';
-import type { RegexEngine, ShikiInternal } from './types/shiki.types';
+import type { ShikiInternal } from './types/shiki.types';
 import { createHighlighterCore } from 'shiki/core';
-import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
+import type { EngineOption } from './types/types';
+import { resolveRegexEngine } from './engine';
 
 type MaybeDefault<T> = T | { default: T };
 
@@ -12,7 +13,7 @@ export type LanguageLoader = () => Awaitable<
 
 export type ThemeLoader = () => Awaitable<MaybeDefault<ThemeInput>>;
 
-export type RuntimeEngineOption = Awaitable<RegexEngine>;
+export type RuntimeEngineOption = EngineOption;
 
 function unwrapModuleDefault<T>(value: MaybeDefault<T>): T {
   if (
@@ -103,10 +104,16 @@ export interface SharedHighlighterManagerOptions<
 > {
   languageLoaders: Record<LangKey, LanguageLoader>;
   themeLoaders: Record<ThemeKey, ThemeLoader>;
+  /**
+   * Regex engine used by the shared highlighter.
+   *
+   * This is intentionally required to align the fine-grained helper API with
+   * `shiki/core`, where callers explicitly control the engine/runtime tradeoff.
+   */
+  engine: RuntimeEngineOption;
   preloadLanguage?: LangKey;
   preloadThemes: readonly ThemeKey[];
   langAlias?: Record<string, string>;
-  engine?: RuntimeEngineOption;
   warnings?: boolean;
 }
 
@@ -178,6 +185,11 @@ export function createSharedHighlighterManager<
             '[@cmshiki/shiki] `preloadThemes` must contain at least one theme key.',
           );
         }
+        if (!options.engine) {
+          throw new Error(
+            '[@cmshiki/shiki] `engine` is required in createSharedHighlighterManager().',
+          );
+        }
         const [preloadedLangs, preloadedThemes, engine] = await Promise.all([
           resolveLanguageForPreload(String(preloadLanguage)),
           Promise.all(
@@ -185,9 +197,7 @@ export function createSharedHighlighterManager<
               resolveThemeForPreload(String(themeKey)),
             ),
           ),
-          options.engine
-            ? Promise.resolve(options.engine)
-            : Promise.resolve(createJavaScriptRegexEngine()),
+          resolveRegexEngine(options.engine),
         ]);
 
         return createHighlighterCore({

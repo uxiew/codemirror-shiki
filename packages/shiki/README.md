@@ -67,7 +67,8 @@ view.dispatch({
 - `themeStyle`：`"cm"` 或 `"shiki"`，默认 `"cm"`
 - `engine`：
   - `"oniguruma"`（默认）：兼容性更高
-  - `"javascript"`：启动更快
+  - `"javascript"`：使用 Shiki 默认的 JavaScript 引擎参数
+  - `{ type: "javascript", options: { target: "ES2018" } }`：显式指定兼容目标
   - 自定义 `RegexEngine`
 - `highlighter`：预初始化的 Shiki highlighter（传入后跳过内部初始化）
   - 当使用 shared highlighter 时，库会优先加载语言对象；字符串语言加载失败会降级为告警，不阻塞编辑器渲染
@@ -153,7 +154,7 @@ function createSharedHighlighterManager(options: {
   preloadLanguage?: string;
   preloadThemes: readonly string[];
   langAlias?: Record<string, string>;
-  engine?: RegexEngine | Promise<RegexEngine>;
+  engine: "oniguruma" | "javascript" | { type: "javascript"; options?: object } | RegexEngine | Promise<RegexEngine>;
   warnings?: boolean;
 }): {
   getHighlighter: () => Promise<ShikiInternal<never, never>>;
@@ -164,8 +165,8 @@ function createSharedHighlighterManager(options: {
 
 说明：
 
-- `createSharedHighlighterManager` 默认使用 JavaScript 引擎（未传 `engine` 时）。
-- 如需 Oniguruma 或自定义引擎，可显式传 `engine`。
+- `createSharedHighlighterManager` 现在要求显式传 `engine`。
+- 这是为了对齐 `shiki/core` 的 fine-grained 语义，不再由 helper 隐式替你决定引擎。
 - `preloadThemes` 至少 1 项；建议把默认展示主题都预热进去。
 
 ## `theme` / `themes` / `defaultColor` 关系说明
@@ -302,7 +303,7 @@ const { shiki } = await shikiToCodeMirror({
 
 JavaScript 引擎运行时兼容：
 - 底层自动检测 `RegExp` 是否支持 `v/d`。  
-- 不支持时，引擎改为兼容目标：`createJavaScriptRegexEngine({ target: "ES2018" })`。避免 `dgv` 报错。
+- 不支持时，显式传兼容目标：`engine: { type: "javascript", options: { target: "ES2018" } }`。
 
 ## 4) 兜底解析器（减少业务样板代码）
 
@@ -354,6 +355,7 @@ const manager = createSharedHighlighterManager({
   },
   preloadLanguage: "javascript",
   preloadThemes: ["github-dark", "github-light"],
+  engine: "oniguruma",
 });
 
 const highlighter = await manager.getHighlighter();
@@ -385,6 +387,7 @@ const manager = createSharedHighlighterManager({
   },
   preloadLanguage: "javascript",
   preloadThemes: ["github-dark", "github-light"],
+  engine: { type: "javascript", options: { target: "ES2018" } },
 });
 ```
 

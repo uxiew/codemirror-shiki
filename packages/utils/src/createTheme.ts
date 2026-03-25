@@ -1,6 +1,6 @@
 import { EditorView } from '@codemirror/view';
 import { Extension } from '@codemirror/state';
-import { type StyleSpec } from 'style-mod';
+import { type StyleSpec } from './style';
 
 interface Nothing {}
 /**

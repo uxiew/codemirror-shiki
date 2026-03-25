@@ -1,6 +1,19 @@
 import type { ShikiToCMOptions } from './types/types';
 
-const defaultOptions: Omit<ShikiToCMOptions, 'themes'> = {
+type DefaultOptions = Pick<
+  ShikiToCMOptions,
+  | 'lang'
+  | 'warnings'
+  | 'versionGuard'
+  | 'themeStyle'
+  | 'defaultColor'
+  | 'cssVariablePrefix'
+  | 'tokenizeMaxLineLength'
+  | 'includeExplanation'
+  | 'tokenizeTimeLimit'
+>;
+
+const defaultOptions: DefaultOptions = {
   lang: 'text',
   warnings: true,
   versionGuard: true,

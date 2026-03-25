@@ -65,7 +65,7 @@ export function getVersionGuardHint(error: unknown): string | undefined {
   if (/Invalid flags supplied to RegExp constructor/i.test(message)) {
     return (
       'The current runtime does not support advanced RegExp flags. ' +
-      'Use `engine: "javascript"` with compatibility target ES2018 or upgrade runtime.'
+      'Use `engine: { type: "javascript", options: { target: "ES2018" } }` or upgrade runtime.'
     );
   }
 

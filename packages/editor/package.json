@@ -47,7 +47,7 @@
   "peerDependencies": {
     "@codemirror/state": "^6.0.0",
     "@codemirror/view": "^6.0.0",
-    "shiki": "^3.0.0"
+    "shiki": "^3.0.0 || ^4.0.0"
   },
   "optionalDependencies": {}
 }

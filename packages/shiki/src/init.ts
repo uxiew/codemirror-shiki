@@ -1,10 +1,5 @@
-import {
-  type ThemeInput,
-  type LanguageInput,
-  type RegexEngine,
-} from '@shikijs/core';
+import { type ThemeInput, type LanguageInput } from '@shikijs/core';
 import { createHighlighterCore } from 'shiki/core';
-import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
 import type { Options } from './types/types';
 import { syncSharedHighlighter } from './shared-highlighter';
 import {
@@ -12,6 +7,7 @@ import {
   normalizeRuntimeLanguages,
 } from './language-normalize';
 import { assertCompatibleHighlighter } from './compat';
+import { resolveRegexEngine } from './engine';
 
 // Narrow the type to what we need, removing extended properties not in internal options if any
 type ShikiOptions = Omit<Options, 'theme' | 'themeStyle'>;
@@ -19,18 +15,8 @@ type ShikiOptions = Omit<Options, 'theme' | 'themeStyle'>;
 /**
  * Get the appropriate regex engine based on the engine option
  */
-async function getEngine(
-  engineOption: Options['engine'],
-): Promise<RegexEngine> {
-  if (engineOption === 'javascript') {
-    return createJavaScriptRegexEngine();
-  }
-  if (engineOption === 'oniguruma' || !engineOption) {
-    const { createOnigurumaEngine } = await import('shiki/engine/oniguruma');
-    return createOnigurumaEngine(import('shiki/wasm'));
-  }
-  // User provided a custom engine
-  return Promise.resolve(engineOption);
+async function getEngine(engineOption: Options['engine']) {
+  return resolveRegexEngine(engineOption, 'oniguruma');
 }
 
 export async function initShiki(options: ShikiOptions) {

@@ -1,7 +1,7 @@
 import { Text } from '@codemirror/state';
 import { Decoration } from '@codemirror/view';
 import { type GrammarState } from '@shikijs/core';
-import { mountStyles, StyleModule } from '@cmshiki/utils';
+import { createStyleModuleName, mountStyles } from '@cmshiki/utils';
 
 import type { Highlighter, ShikiToCMOptions } from './types/types';
 import { toStyleObject } from './utils';
@@ -326,7 +326,7 @@ export class ShikiHighlighter extends Base {
         if (fontStyle & 4) style += ';text-decoration:underline';
 
         // dedupe and cache the style
-        const cls = cmClasses[style] || StyleModule.newName();
+        const cls = cmClasses[style] || createStyleModuleName();
         cmClasses[style] = cls;
 
         // convert to CodeMirror decoration

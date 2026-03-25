@@ -13,8 +13,9 @@ pnpm add @cmshiki/utils
 - `mountStyles(view, spec, scopes?)`
 - `getClasses(view)`
 - `classList(view)`
+- `createStyleModuleName()`
 - `createTheme(options)`
-- `style-mod` 全量 re-export
+- `StyleSpec` 类型
 
 ## 使用示例
 
@@ -59,6 +60,7 @@ function mountStyles(
 
 function getClasses(view: EditorView): string[];
 function classList(view: EditorView): DOMTokenList;
+function createStyleModuleName(): string;
 
 function createTheme(options: CreateThemeOptions): Extension;
 ```

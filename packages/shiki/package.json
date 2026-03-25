@@ -34,12 +34,12 @@
   "exports": {
     ".": {
       "require": "./dist/index.cjs",
-      "default": "./dist/index.mjs",
+      "import": "./dist/index.mjs",
       "types": "./dist/index.d.ts"
     },
     "./core": {
       "require": "./dist/core.cjs",
-      "default": "./dist/core.mjs",
+      "import": "./dist/core.mjs",
       "types": "./dist/core.d.ts"
     }
   },
@@ -52,7 +52,7 @@
   "peerDependencies": {
     "@codemirror/state": "^6.0.0",
     "@codemirror/view": "^6.0.0",
-    "shiki": "^3.0.0"
+    "shiki": "^3.0.0 || ^4.0.0"
   },
   "dependencies": {
     "@cmshiki/utils": "workspace:^",

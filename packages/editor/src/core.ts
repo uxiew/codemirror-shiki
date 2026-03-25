@@ -1,6 +1,7 @@
 import { EditorView } from '@codemirror/view';
 import { Compartment, Extension } from '@codemirror/state';
 import {
+  type Options as CoreOptions,
   type Options,
   type ThemeKey,
   type ThemeRegistry,
@@ -8,7 +9,7 @@ import {
   themeCompartment,
   updateEffect,
 } from '@cmshiki/shiki/core';
-import type { ShikiEditorOptions } from './types';
+import type { CMEditorOptions, ShikiEditorOptions } from './types';
 import { partitionOptions } from './utils';
 
 export {
@@ -19,13 +20,24 @@ export {
 
 const shikiComp = new Compartment();
 
+type CoreBaseEditorOptions<TThemes extends ThemeRegistry = ThemeRegistry> =
+  Omit<CoreOptions<TThemes>, 'theme' | 'themes' | 'defaultColor' | 'engine'>;
+
+interface CoreShikiEditorOptions<TThemes extends ThemeRegistry = ThemeRegistry>
+  extends CoreBaseEditorOptions<TThemes>, CMEditorOptions {
+  theme?: CoreOptions<TThemes>['theme'];
+  themes?: TThemes;
+  defaultColor?: CoreOptions<TThemes>['defaultColor'];
+  engine?: CoreOptions<TThemes>['engine'];
+}
+
 interface PreloadedShiki {
   shiki: Extension;
   getTheme: (name?: string, view?: EditorView) => Extension;
 }
 
 function resolveInitialThemeKey(
-  options: ShikiEditorOptions,
+  options: CoreShikiEditorOptions,
 ): string | undefined {
   if (options.defaultColor === false) return undefined;
 
@@ -68,9 +80,11 @@ export class ShikiEditor<TThemes extends ThemeRegistry = ThemeRegistry> {
    * })
    */
   static async create<TThemes extends ThemeRegistry = ThemeRegistry>(
-    options: ShikiEditorOptions<TThemes>,
+    options: CoreShikiEditorOptions<TThemes>,
   ): Promise<ShikiEditor<TThemes>> {
-    const { shikiOptions } = partitionOptions(options);
+    const { shikiOptions } = partitionOptions(
+      options as ShikiEditorOptions<TThemes>,
+    );
 
     // 1. 先异步加载 Shiki
     const { shiki, getTheme } = await shikiToCodeMirror(shikiOptions);
@@ -94,11 +108,12 @@ export class ShikiEditor<TThemes extends ThemeRegistry = ThemeRegistry> {
    * @param preloaded - 内部使用，预加载的 Shiki 数据
    */
   constructor(
-    private readonly options: ShikiEditorOptions<TThemes>,
+    private readonly options: CoreShikiEditorOptions<TThemes>,
     preloaded?: PreloadedShiki,
   ) {
-    const { shikiOptions, CodeMirrorOptions: cmOptions } =
-      partitionOptions(options);
+    const { shikiOptions, CodeMirrorOptions: cmOptions } = partitionOptions(
+      options as ShikiEditorOptions<TThemes>,
+    );
 
     if (preloaded) {
       // 使用预加载的 Shiki（来自 create() 静态方法）
@@ -140,7 +155,7 @@ export class ShikiEditor<TThemes extends ThemeRegistry = ThemeRegistry> {
     }
   }
 
-  private async registerInternal(options: ShikiEditorOptions<TThemes>) {
+  private async registerInternal(options: CoreShikiEditorOptions<TThemes>) {
     const { shiki, getTheme } = await shikiToCodeMirror(options);
     return {
       getTheme,
@@ -160,7 +175,7 @@ export class ShikiEditor<TThemes extends ThemeRegistry = ThemeRegistry> {
    * Dynamically set listening events,listen when the document changed.
    * @param {(u: ViewUpdate)}
    */
-  onDocChanged(callback: ShikiEditorOptions<TThemes>['onDocChanged']) {
+  onDocChanged(callback: CoreShikiEditorOptions<TThemes>['onDocChanged']) {
     this.options.onDocChanged = callback;
   }
 
