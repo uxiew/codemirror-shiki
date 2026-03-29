@@ -1,10 +1,7 @@
-import { type EditorView } from '@codemirror/view';
-import { StyleModule } from 'style-mod';
+import type { EditorView } from '@codemirror/view';
+import { type StyleSpec, StyleModule } from 'style-mod';
 
-export type StyleSpec = {
-  [propOrSelector: string]: string | number | StyleSpec | null;
-};
-
+export { StyleSpec };
 /**
  * get editor root dom's classList
  *
@@ -59,7 +56,7 @@ export function mountStyles(
   );
 }
 
-export function createStyleModuleName() {
+export function newStyleModuleName() {
   return StyleModule.newName();
 }
 

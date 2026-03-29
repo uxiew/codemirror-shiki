@@ -310,8 +310,8 @@ const editor = await ShikiEditor.create({
   engine: '${cmProps.engine}'
 });
 
-// 后续动态更新配置，它会自动帮你 dispatch updateEffect
-editor.update({
+// 后续动态更新配置
+editor.render({
   lang: '...',
   theme: '...',
   engine: '...'

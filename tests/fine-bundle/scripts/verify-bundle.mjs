@@ -8,7 +8,7 @@ const noisyTokens = ['python', 'ruby', 'rust', 'dracula', 'nord'];
 const scenarios = {
   default: {
     outDir: 'dist-default',
-    mode: 'broad',
+    mode: 'strict',
   },
   'core-preload': {
     outDir: 'dist-core-preload',
@@ -16,10 +16,6 @@ const scenarios = {
   },
   'core-resolve': {
     outDir: 'dist-core-resolve',
-    mode: 'strict',
-  },
-  'core-cache': {
-    outDir: 'dist-core-cache',
     mode: 'strict',
   },
 };
@@ -109,18 +105,7 @@ console.log(
   [...includedThemes].sort().join(', ') || '(none)',
 );
 
-if (mode === 'broad') {
-  if (jsAssets.length < 50 || noisyMatches.length === 0) {
-    console.error(
-      `[verify:${scenario}] expected broad dynamic bundle footprint, but got too few assets or no noisy tokens.`,
-    );
-    process.exit(1);
-  }
-
-  console.log(
-    `[verify:${scenario}] broad dynamic loading check passed (default entry behavior).`,
-  );
-} else {
+if (mode === 'strict') {
   const extraLangs = [...includedLangs].filter(
     (name) => !expectedLangs.has(name),
   );
@@ -160,6 +145,8 @@ if (mode === 'broad') {
   }
 
   console.log(`[verify:${scenario}] strict fine-grained bundle check passed.`);
+} else {
+  throw new Error(`[verify:${scenario}] Unknown mode: ${mode}`);
 }
 
 if (process.env.KEEP_SOURCEMAP !== '1') {

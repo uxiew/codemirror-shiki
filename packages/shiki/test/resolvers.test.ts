@@ -1,38 +1,38 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  createCachedLangResolver,
-  createCachedThemeResolver,
+  createLangResolver,
+  createThemeResolver,
 } from '../src/resolvers';
 
 describe('resolver helpers', () => {
-  it('should cache language loader results', async () => {
+  it('should resolve language loader results', async () => {
     const javascriptLoader = vi.fn(async () => ({
       default: [{ name: 'javascript' }],
     }));
-    const resolveLang = createCachedLangResolver({
-      javascript: javascriptLoader,
+    const resolveLang = createLangResolver({
+      javascript: javascriptLoader as any,
     });
 
     const first = await resolveLang('javascript');
     const second = await resolveLang('javascript');
 
-    expect(javascriptLoader).toHaveBeenCalledTimes(1);
+    expect(javascriptLoader).toHaveBeenCalledTimes(2);
     expect(first).toEqual([{ name: 'javascript' }]);
     expect(second).toEqual([{ name: 'javascript' }]);
   });
 
-  it('should cache theme loader results', async () => {
+  it('should resolve theme loader results', async () => {
     const darkThemeLoader = vi.fn(async () => ({
       default: { name: 'github-dark' },
     }));
-    const resolveTheme = createCachedThemeResolver({
-      'github-dark': darkThemeLoader,
+    const resolveTheme = createThemeResolver({
+      'github-dark': darkThemeLoader as any,
     });
 
     const first = await resolveTheme('github-dark');
     const second = await resolveTheme('github-dark');
 
-    expect(darkThemeLoader).toHaveBeenCalledTimes(1);
+    expect(darkThemeLoader).toHaveBeenCalledTimes(2);
     expect(first).toEqual({ name: 'github-dark' });
     expect(second).toEqual({ name: 'github-dark' });
   });

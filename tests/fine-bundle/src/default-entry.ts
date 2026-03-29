@@ -6,22 +6,28 @@ import {
   themeCompartment,
   updateEffect,
 } from '@cmshiki/shiki';
+import { createHighlighter } from 'shiki';
 import { languageSamples, mountHarness } from './ui';
 
 const { editorEl, langSelect, themeSelect } = mountHarness(
-  'Default Entry Dynamic Loading',
-  '使用 @cmshiki/shiki（默认入口），不传 resolveLang/resolveTheme',
+  'Full Shiki Bundle',
+  '使用 shiki 全量包（包含内置引擎和全量语言/主题注册）',
 );
 
+const highlighter = await createHighlighter({
+  langs: ['javascript', 'typescript', 'json', 'markdown'],
+  themes: ['dark-plus', 'github-light'],
+});
+
 const { shiki, getTheme } = await shikiToCodeMirror({
+  highlighter,
   lang: 'javascript',
   themes: {
-    dark: 'github-dark',
+    dark: 'dark-plus',
     light: 'github-light',
   },
   defaultColor: 'dark',
   themeStyle: 'cm',
-  engine: 'javascript',
   warnings: true,
 });
 

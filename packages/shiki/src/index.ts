@@ -4,9 +4,8 @@ import { createShikiToCodeMirror } from './create-shiki-to-codemirror';
 
 export * from './types/types';
 export {
-  createCachedLangResolver,
-  createCachedThemeResolver,
-  createHighlighterManager,
+  createLangResolver,
+  createThemeResolver,
 } from './resolvers';
 export { ShikiHighlighter } from './highlighter';
 export { updateEffect } from './viewPlugin';

@@ -39,6 +39,7 @@
     "tsx": "catalog:",
     "typescript": "catalog:",
     "unbuild": "catalog:",
+    "tsdown": "catalog:",
     "vitest": "catalog:"
   },
   "dependencies": {}

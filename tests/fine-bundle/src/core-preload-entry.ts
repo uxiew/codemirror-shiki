@@ -5,33 +5,35 @@ import {
   shikiToCodeMirror,
   themeCompartment,
   updateEffect,
-} from '@cmshiki/shiki/core';
+} from '@cmshiki/shiki';
 import { createHighlighterCore } from 'shiki/core';
 import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
-import javascript from '@shikijs/langs/javascript';
 import typescript from '@shikijs/langs/typescript';
 import json from '@shikijs/langs/json';
-import githubDark from '@shikijs/themes/github-dark';
+import darkPlus from '@shikijs/themes/dark-plus';
 import githubLight from '@shikijs/themes/github-light';
 import { languageSamples, mountHarness } from './ui';
 
 const { editorEl, langSelect, themeSelect } = mountHarness(
-  'Core Preloaded',
-  '使用 @cmshiki/shiki/core + createHighlighterCore，预加载 3 语言 + 2 主题',
+  'Preloaded Highlighter',
+  '使用 @cmshiki/shiki + createHighlighterCore，预加载 3 语言 + 2 主题',
 );
 
 const highlighter = await createHighlighterCore({
-  langs: [javascript, typescript, json],
-  themes: [githubDark, githubLight],
+  langs: [() => import('@shikijs/langs/javascript'), typescript, json,
+  () => import('@shikijs/langs/markdown')
+  ],
+  themes: [darkPlus, githubLight],
   engine: createJavaScriptRegexEngine(),
+
 });
 
 const { shiki, getTheme } = await shikiToCodeMirror({
   highlighter,
   lang: 'javascript',
   themes: {
-    dark: 'github-dark',
-    light: 'github-light',
+    dark: darkPlus.name as string,
+    light: githubLight.name as string,
   },
   defaultColor: 'dark',
   themeStyle: 'cm',

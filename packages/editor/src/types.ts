@@ -58,12 +58,5 @@ export interface ShikiEditorOptions<
    * Use `'dark'` instead of `'github-dark'` when `themes.dark = 'github-dark'`.
    */
   defaultColor?: CMShikiOptions<TThemes>['defaultColor'];
-  /**
-   * Regex engine for tokenization.
-   *
-   * - `'oniguruma'`: default, better compatibility
-   * - `'javascript'`: faster startup
-   * - custom `RegexEngine` for advanced control
-   */
-  engine?: CMShikiOptions<TThemes>['engine'];
+
 }

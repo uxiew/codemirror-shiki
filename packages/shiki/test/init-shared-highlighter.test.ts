@@ -3,6 +3,16 @@ import { describe, expect, it, vi } from 'vitest';
 import { initShiki } from '../src/init';
 
 describe('initShiki: shared highlighter passthrough', () => {
+  it('should throw when highlighter is missing', async () => {
+    await expect(
+      initShiki({
+        lang: 'typescript',
+        themes: { light: 'github-light', dark: 'github-dark' },
+        warnings: true,
+      } as any),
+    ).rejects.toThrow(/`highlighter` is required/i);
+  });
+
   it('should return provided highlighter without syncing language/theme', async () => {
     const loadLanguage = vi.fn(async () => {});
     const loadTheme = vi.fn(async () => {});
@@ -34,38 +44,6 @@ describe('initShiki: shared highlighter passthrough', () => {
     expect(loadTheme).not.toHaveBeenCalled();
   });
 
-  it('should warn that resolvers are ignored for shared highlighter', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const highlighter = {
-      getLanguage: vi.fn(() => undefined),
-      getTheme: vi.fn(() => ({ fg: '#fff', bg: '#000' })),
-      setTheme: vi.fn(() => ({ colorMap: ['#000', '#fff'] })),
-    };
-
-    const result = await initShiki({
-      highlighter: highlighter as any,
-      lang: 'dart',
-      resolveLang: async () => ({ name: 'dart' }) as any,
-      resolveTheme: async () => ({ name: 'github-dark' }) as any,
-      themes: {
-        light: 'github-light',
-        dark: 'github-dark',
-      },
-      defaultColor: 'dark',
-      warnings: true,
-      themeStyle: 'cm',
-      includeExplanation: false,
-      tokenizeMaxLineLength: 20000,
-      tokenizeTimeLimit: 500,
-    } as any);
-
-    expect(result).toBe(highlighter);
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('resolveLang/resolveTheme'),
-    );
-    warn.mockRestore();
-  });
-
   it('should still fail fast for incompatible highlighter by default', async () => {
     const invalidHighlighter = {
       loadLanguage: vi.fn(async () => {}),
@@ -80,5 +58,22 @@ describe('initShiki: shared highlighter passthrough', () => {
         warnings: true,
       } as any),
     ).rejects.toThrow(/Incompatible highlighter instance/i);
+  });
+
+  it('should allow skipping version guard explicitly', async () => {
+    const highlighter = {
+      loadLanguage: vi.fn(async () => {}),
+      loadTheme: vi.fn(async () => {}),
+    };
+
+    const result = await initShiki({
+      highlighter: highlighter as any,
+      lang: 'typescript',
+      themes: { light: 'github-light', dark: 'github-dark' },
+      warnings: true,
+      versionGuard: false,
+    } as any);
+
+    expect(result).toBe(highlighter);
   });
 });

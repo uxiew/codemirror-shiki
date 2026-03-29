@@ -35,7 +35,13 @@ const emit = defineEmits<{
 }>();
 
 watch(
-  () => [props.lang.value, props.lang.name, props.theme.name, props.engine, props.mode],
+  () => [
+    props.lang.value,
+    props.lang.name,
+    props.theme.name,
+    props.engine,
+    props.mode,
+  ],
   async (v, o) => {
     if (!editorInstance.value || !o) return;
 
@@ -46,24 +52,28 @@ watch(
     }
 
     const start = performance.now();
-    
-    if (props.mode === 'editor') {
+
+    if (props.mode === "editor") {
       const editor = editorInstance.value as ShikiEditor;
       if (v[0] !== o[0]) {
-        editor.setValue(v[0] as string);
+        editor.setDoc(v[0] as string);
       }
       if (v[1] !== o[1] || v[2] !== o[2] || v[3] !== o[3]) {
         const payload: Record<string, any> = {};
         if (v[1] !== o[1]) payload.lang = v[1];
         if (v[2] !== o[2]) payload.theme = v[2];
         if (v[3] !== o[3]) payload.engine = v[3];
-        editor.update(payload);
+        editor.render(payload);
       }
     } else {
       const view = editorInstance.value as EditorView;
       if (v[0] !== o[0]) {
         view.dispatch({
-          changes: { from: 0, to: view.state.doc.length, insert: v[0] as string }
+          changes: {
+            from: 0,
+            to: view.state.doc.length,
+            insert: v[0] as string,
+          },
         });
       }
       if (v[1] !== o[1] || v[2] !== o[2] || v[3] !== o[3]) {
@@ -72,7 +82,7 @@ watch(
         if (v[2] !== o[2]) payload.theme = v[2];
         if (v[3] !== o[3]) payload.engine = v[3];
         view.dispatch({
-          effects: updateEffect.of(payload)
+          effects: updateEffect.of(payload),
         });
       }
     }
@@ -86,12 +96,12 @@ async function run() {
     editorInstance.value.destroy();
     editorInstance.value = undefined;
   }
-  
+
   if (!editorView.value) return;
 
   const start = performance.now();
 
-  if (props.mode === 'editor') {
+  if (props.mode === "editor") {
     editorInstance.value = await ShikiEditor.create({
       lang: props.lang.name,
       theme: props.theme.name,
@@ -121,7 +131,7 @@ async function run() {
       theme: props.theme.name,
       engine: props.engine,
     });
-    
+
     editorInstance.value = new EditorView({
       doc: props.lang.value,
       parent: editorView.value,
@@ -132,11 +142,11 @@ async function run() {
         drawSelection(),
         lineNumbers(),
         highlightActiveLine(),
-        shiki
+        shiki,
       ],
     });
   }
-  
+
   await nextTick();
   emit("perf", performance.now() - start);
 }

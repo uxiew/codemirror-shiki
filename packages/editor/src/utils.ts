@@ -23,11 +23,10 @@ export function partitionOptions<TThemes extends ThemeRegistry = ThemeRegistry>(
     'tokenizeMaxLineLength',
     'tokenizeTimeLimit',
     'defaultColor',
-    'engine',
     'highlighter',
-    'resolveLanguage',
-    'resolveTheme',
     'versionGuard',
+    'resolveLang',
+    'resolveTheme',
   ];
   const CodeMirrorKeys: CodeMirrorConfigKeys[] = [
     'extensions',

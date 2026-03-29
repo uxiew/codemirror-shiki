@@ -3,15 +3,32 @@ import type {
   BundledTheme,
   CodeOptionsMultipleThemes,
   StringLiteralUnion,
-  ShikiInternal,
   SpecialLanguage,
   LanguageInput,
-  RegexEngine,
   TokenizeWithThemeOptions,
-  Awaitable,
   ThemeInput,
 } from './shiki.types';
-import type { JavaScriptRegexEngineOptions } from 'shiki/engine/javascript';
+import type { LangResolver, ThemeResolver } from '../resolvers';
+export type InitShikiFn = (
+  options: Omit<Options, 'theme' | 'themeStyle'>,
+) => Promise<Highlighter>;
+/**
+ * A compatibility-first Shiki highlighter shape.
+ *
+ * We intentionally avoid binding to a single `@shikijs/types` instance,
+ * otherwise monorepos with mixed Shiki subpackages can hit nominal mismatch
+ * errors during type-checking.
+ */
+export interface Highlighter {
+  getLanguage: (...args: any[]) => any;
+  getTheme: (...args: any[]) => any;
+  setTheme: (...args: any[]) => any;
+  loadLanguage?: (...args: any[]) => any;
+  loadTheme?: (...args: any[]) => any;
+  getLoadedLanguages?: (...args: any[]) => string[];
+  getLoadedThemes?: (...args: any[]) => string[];
+  [key: string]: any;
+}
 
 export interface BaseOptions {
   /**
@@ -38,26 +55,6 @@ export type ThemeKey<TThemes extends ThemeRegistry = ThemeRegistry> = Extract<
   string
 >;
 
-export interface JavaScriptEngineOption {
-  type: 'javascript';
-  options?: JavaScriptRegexEngineOptions;
-}
-
-/** Regex engine option for Shiki tokenization */
-export type EngineOption =
-  | 'javascript'
-  | 'oniguruma'
-  | JavaScriptEngineOption
-  | Awaitable<RegexEngine>;
-
-export type ResolveLangFn = (
-  lang: string,
-) => Awaitable<LanguageInput | ReadonlyArray<LanguageInput> | undefined | null>;
-
-export type ResolveThemeFn = (
-  theme: string,
-) => Awaitable<ThemeInput | undefined | null>;
-
 export interface ExtraOptions<TThemes extends ThemeRegistry = ThemeRegistry>
   extends
     Omit<CodeOptionsMultipleThemes, 'themes' | 'defaultColor' | 'engine'>,
@@ -76,26 +73,41 @@ export interface ExtraOptions<TThemes extends ThemeRegistry = ThemeRegistry>
   themes?: TThemes;
 }
 
-export type Highlighter = ShikiInternal<never, never>;
-
 export type CmSHOptions<TThemes extends ThemeRegistry = ThemeRegistry> =
   Required<Omit<ShikiToCMOptions<TThemes>, 'theme'>>;
 
 export interface Options<
   TThemes extends ThemeRegistry = ThemeRegistry,
-> extends Partial<BaseOptions & ExtraOptions<TThemes>> {
+> extends Partial<Omit<BaseOptions, 'lang' | 'theme'> & ExtraOptions<TThemes>> {
+  theme?: BaseOptions['theme'];
+  /**
+   * Language resolver function specifically for lazy-loading.
+   *
+   * It is highly recommended to provide this so `codemirror-shiki` can
+   * automatically resolve and inject missing languages when the editor's
+   * language is switched dynamically via `updateEffect.of({ lang: 'xxx' })`.
+   *
+   * Usually created via `createLangResolver`.
+   */
+  resolveLang?: LangResolver<any>;
+  /**
+   * Theme resolver function specifically for lazy-loading.
+   *
+   * Highly recommended when themes are expected to switch dynamically.
+   * Automatically triggered when missing themes are requested.
+   *
+   * Usually created via `createThemeResolver`.
+   */
+  resolveTheme?: ThemeResolver<any>;
   /**
    * Active language for highlighting.
    *
-   * Besides the normal string/object language input, this also accepts
-   * language arrays (for example default exports from `@shikijs/langs/*`).
-   * When an array is provided, the first entry is treated as the active
-   * language and the rest are treated as preload candidates.
+   * This follows Shiki's normal language input contract.
+   *
+   * Array/module forms are normalized internally, so callers usually only need
+   * a language name or a single Shiki language object.
    */
-  lang?:
-    | BaseOptions['lang']
-    | ReadonlyArray<LanguageInput>
-    | Array<LanguageInput>;
+  lang?: BaseOptions['lang'];
   /**
    * A map of color names to themes.
    *
@@ -132,15 +144,6 @@ export interface Options<
    */
   warnings?: boolean;
   /**
-   * Regex engine to use for tokenization.
-   * - Pass `'javascript'` to use the JavaScript RegExp engine with Shiki defaults
-   * - Pass `'oniguruma'` to use the Oniguruma engine via WASM (better compatibility, default)
-   * - Pass `{ type: 'javascript', options: ... }` for explicit JavaScript engine options
-   * - Pass a custom RegexEngine for full control
-   * @default 'oniguruma'
-   */
-  engine?: EngineOption;
-  /**
    * Pre-initialized Shiki highlighter instance.
    * When provided, the internal initialization is skipped, enabling zero-delay editor creation.
    *
@@ -168,24 +171,6 @@ export interface Options<
    */
   highlighter?: Highlighter;
   /**
-   * Resolve and return language input(s) when a language string is not bundled
-   * during internal highlighter initialization.
-   *
-   * Note: when `highlighter` is provided, this resolver is ignored.
-   *
-   * Useful for fine-grained dynamic imports in business apps.
-   */
-  resolveLang?: ResolveLangFn;
-  /**
-   * Resolve and return theme input when a theme string cannot be loaded directly
-   * during internal highlighter initialization.
-   *
-   * Note: when `highlighter` is provided, this resolver is ignored.
-   *
-   * Useful for fine-grained dynamic imports in business apps.
-   */
-  resolveTheme?: ResolveThemeFn;
-  /**
    * Runtime compatibility guard for external shared highlighter instances.
    *
    * When enabled, incompatible highlighter objects will fail fast with
@@ -198,13 +183,10 @@ export interface Options<
 
 type UnknownOptions =
   | 'langAlias'
-  | 'engine'
   | 'colorReplacements'
   | 'grammarState'
   | 'grammarContextCode'
   | 'highlighter'
-  | 'resolveLang'
-  | 'resolveTheme'
   | 'versionGuard';
 
 export type ShikiToCMOptions<TThemes extends ThemeRegistry = ThemeRegistry> =

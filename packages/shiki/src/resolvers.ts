@@ -1,252 +1,124 @@
-import type { LanguageInput, ThemeInput, Awaitable } from './types/shiki.types';
-import { normalizeRuntimeLangs } from './language-normalize';
-import type { ShikiInternal } from './types/shiki.types';
-import { createHighlighterCore } from 'shiki/core';
-import type { EngineOption } from './types/types';
-import { resolveRegexEngine } from './engine';
+import type {
+  Awaitable,
+  MaybeModule,
+  BundledLanguage,
+  BundledTheme,
+  ThemeRegistrationAny,
+  LanguageRegistration,
+  ThemeInput,
+  LanguageInput,
+  MaybeArray,
+  StringLiteralUnion,
+} from './types/shiki.types';
 
-type MaybeDefault<T> = T | { default: T };
+export type LangModule = Awaitable<
+  MaybeModule<MaybeArray<LanguageRegistration>>
+>;
+export type ThemeModule = Awaitable<MaybeModule<ThemeRegistrationAny>>;
 
+// export type LangLoader = () => LangMoudle;
 export type LangLoader = () => Awaitable<
-  MaybeDefault<LanguageInput | ReadonlyArray<LanguageInput>>
+  MaybeModule<MaybeArray<LanguageRegistration>>
 >;
 
-export type ThemeLoader = () => Awaitable<MaybeDefault<ThemeInput>>;
+export type ThemeLoader = () => Awaitable<ThemeInput>;
 
-export type RuntimeEngineOption = EngineOption;
-
-function unwrapModuleDefault<T>(value: MaybeDefault<T>): T {
+function unwrapModuleDefault<T>(value: MaybeModule<T>): T {
   if (
     value &&
     typeof value === 'object' &&
-    'default' in (value as any) &&
-    (value as any).default !== undefined
+    'default' in (value as Record<string, unknown>) &&
+    (value as Record<string, unknown>).default !== undefined
   ) {
-    return (value as any).default as T;
+    return (value as { default: T }).default;
   }
+
   return value as T;
 }
 
-/**
- * Create a cached language resolver from dynamic import loaders.
- *
- * @example
- * const resolveLang = createCachedLangResolver({
- *   javascript: () => import('@shikijs/langs/javascript'),
- *   json: () => import('@shikijs/langs/json'),
- * })
- */
-export function createCachedLangResolver(loaders: Record<string, LangLoader>) {
-  const cache = new Map<string, Promise<LanguageInput[]>>();
-
-  return async (lang: string) => {
-    const key = String(lang || '').toLowerCase();
-    if (!key) return undefined;
-
-    const loader = loaders[key];
-    if (!loader) return undefined;
-
-    if (!cache.has(key)) {
-      cache.set(
-        key,
-        Promise.resolve(loader()).then((loaded) => {
-          const unwrapped = unwrapModuleDefault(loaded as any);
-          return normalizeRuntimeLangs(unwrapped as any).filter(
-            (item): item is LanguageInput => typeof item !== 'string',
-          );
-        }),
-      );
-    }
-
-    return cache.get(key);
-  };
+export interface LangResolver<
+  TKeys extends string = StringLiteralUnion<BundledLanguage>,
+> {
+  /** Returns a lang loader for the given lang key. */
+  (lang: TKeys): Promise<MaybeArray<LanguageRegistration> | undefined>;
+  /** Returns all the language inputs registered in this resolver. */
+  of: (lang?: StringLiteralUnion<TKeys>) => LanguageInput[];
+  loaders: Record<TKeys, LangLoader>;
 }
 
 /**
- * Create a cached theme resolver from dynamic import loaders.
+ * Create a lang resolver from dynamic import.
  *
  * @example
- * const resolveTheme = createCachedThemeResolver({
+ * const resolveLang = createLangResolver({
+ *   javascript: () => import('@shikijs/langs/javascript'),
+ *   json: () => import('@shikijs/langs/json'),
+ * })
+ *
+ * // Access the loaders directly
+ * resolveLang.loaders.javascript
+ */
+export function createLangResolver<TKeys extends BundledLanguage>(
+  loaders: Record<TKeys, LangLoader>,
+): LangResolver<TKeys> {
+  const lookup = new Map<string, LangLoader>();
+  (Object.keys(loaders) as TKeys[]).forEach((key) => {
+    lookup.set(key, loaders[key]);
+  });
+
+  const resolver = async (lang: TKeys) => {
+    const loader = lookup.get(lang);
+    if (!loader) return undefined;
+
+    const loaded = await loader();
+    return unwrapModuleDefault(loaded);
+  };
+  resolver.of = (lang?: TKeys) =>
+    lang
+      ? [loaders[lang]]
+      : Object.values<LangLoader>(loaders).map((loader) => loader);
+  resolver.loaders = loaders;
+  return resolver as unknown as LangResolver<TKeys>;
+}
+
+export interface ThemeResolver<
+  TKeys extends string = StringLiteralUnion<BundledTheme>,
+> {
+  /** Returns a theme loader for the given theme key. */
+  (theme: TKeys): Promise<ThemeInput | undefined>;
+  /** Returns all the theme inputs registered in this resolver. */
+  of: (theme?: StringLiteralUnion<TKeys>) => ThemeInput[];
+  loaders: Record<TKeys, ThemeLoader>;
+}
+
+/**
+ * Create a theme resolver from dynamic import.
+ *
+ * @example
+ * const resolveTheme = createThemeResolver({
  *   'github-dark': () => import('@shikijs/themes/github-dark'),
  *   'github-light': () => import('@shikijs/themes/github-light'),
  * })
  */
-export function createCachedThemeResolver(
-  loaders: Record<string, ThemeLoader>,
-) {
-  const cache = new Map<string, Promise<ThemeInput>>();
+export function createThemeResolver<TKeys extends BundledTheme>(
+  loaders: Record<TKeys, ThemeLoader>,
+): ThemeResolver<TKeys> {
+  const lookup = new Map<string, ThemeLoader>();
+  (Object.keys(loaders) as TKeys[]).forEach((key) => {
+    lookup.set(key, loaders[key]);
+  });
 
-  return async (theme: string) => {
-    const key = String(theme || '').toLowerCase();
-    if (!key) return undefined;
-
-    const loader = loaders[key];
+  const resolver = async (theme: TKeys) => {
+    const loader = lookup.get(theme);
     if (!loader) return undefined;
 
-    if (!cache.has(key)) {
-      cache.set(
-        key,
-        Promise.resolve(loader()).then((loaded) =>
-          unwrapModuleDefault(loaded as any),
-        ),
-      );
-    }
-
-    return cache.get(key);
+    const loaded = await loader();
+    return unwrapModuleDefault(loaded as MaybeModule<ThemeInput>);
   };
-}
-
-export interface SharedHighlighterManagerOptions<
-  LangKey extends string = string,
-  ThemeKey extends string = string,
-> {
-  /**
-   * Preferred field name.
-   */
-  langLoaders?: Record<LangKey, LangLoader>;
-  themeLoaders: Record<ThemeKey, ThemeLoader>;
-  /**
-   * Regex engine used by the shared highlighter.
-   *
-   * This is intentionally required to align the fine-grained helper API with
-   * `shiki/core`, where callers explicitly control the engine/runtime tradeoff.
-   */
-  engine: RuntimeEngineOption;
-  preloadLangs?: LangKey;
-  preloadThemes: readonly ThemeKey[];
-  langAlias?: Record<string, string>;
-  warnings?: boolean;
-}
-
-export interface SharedHighlighterManager {
-  /**
-   * Get a highlighter instance.
-   * - no arg: return shared/preloaded instance
-   * - with lang: return language-scoped cached instance
-   */
-  getHighlighter: (lang?: string) => Promise<ShikiInternal<never, never>>;
-  resolveLang: ReturnType<typeof createCachedLangResolver>;
-  resolveTheme: ReturnType<typeof createCachedThemeResolver>;
-}
-
-/**
- * Create a shared highlighter manager for fine-grained bundling.
- *
- * It encapsulates:
- * - cached language/theme resolvers
- * - one shared highlighter promise (`getHighlighter`)
- * - shared highlighter initialization for fine-grained bundling
- */
-export function createHighlighterManager<
-  LangKey extends string = string,
-  ThemeKey extends string = string,
->(
-  options: SharedHighlighterManagerOptions<LangKey, ThemeKey>,
-): SharedHighlighterManager {
-  const warnings = options.warnings ?? true;
-  const langLoaders = options.langLoaders || ({} as any);
-
-  const resolveLang = createCachedLangResolver(
-    langLoaders as Record<string, LangLoader>,
-  );
-  const resolveTheme = createCachedThemeResolver(
-    options.themeLoaders as Record<string, ThemeLoader>,
-  );
-
-  let sharedHighlighterPromise: Promise<ShikiInternal<never, never>> | null =
-    null;
-  const perLanguageHighlighterCache = new Map<
-    string,
-    Promise<ShikiInternal<never, never>>
-  >();
-  const resolvedThemesPromise = Promise.all(
-    options.preloadThemes.map((themeKey) =>
-      resolveThemeForPreload(String(themeKey)),
-    ),
-  );
-  const resolvedEnginePromise = resolveRegexEngine(options.engine);
-
-  async function resolveLangForPreload(lang: string) {
-    const languages = await Promise.resolve(resolveLang(lang));
-    if (!languages || languages.length === 0) {
-      throw new Error(
-        `[@cmshiki/shiki] Failed to preload language "${lang}". ` +
-          'Please check your langLoaders map.',
-      );
-    }
-    return languages;
-  }
-
-  async function resolveThemeForPreload(theme: string) {
-    const themeInput = await Promise.resolve(resolveTheme(theme));
-    if (!themeInput) {
-      throw new Error(
-        `[@cmshiki/shiki] Failed to preload theme "${theme}". ` +
-          'Please check your themeLoaders map.',
-      );
-    }
-    return themeInput;
-  }
-
-  async function createHighlighterForLang(lang: string) {
-    const [langs, themes, engine] = await Promise.all([
-      resolveLangForPreload(lang),
-      resolvedThemesPromise,
-      resolvedEnginePromise,
-    ]);
-
-    return createHighlighterCore({
-      langs,
-      themes,
-      langAlias: options.langAlias,
-      engine,
-      warnings,
-    });
-  }
-
-  async function getSharedHighlighter() {
-    if (!sharedHighlighterPromise) {
-      sharedHighlighterPromise = (async () => {
-        const preloadLanguage =
-          options.preloadLangs ||
-          (Object.keys(langLoaders)[0] as LangKey | undefined);
-        if (!preloadLanguage || String(preloadLanguage).trim().length === 0) {
-          throw new Error(
-            '[@cmshiki/shiki] `preloadLangs` is missing and langLoaders is empty.',
-          );
-        }
-        if (!options.preloadThemes || options.preloadThemes.length === 0) {
-          throw new Error(
-            '[@cmshiki/shiki] `preloadThemes` must contain at least one theme key.',
-          );
-        }
-        if (!options.engine) {
-          throw new Error(
-            '[@cmshiki/shiki] `engine` is required in createSharedHighlighterManager().',
-          );
-        }
-        return createHighlighterForLang(String(preloadLanguage));
-      })();
-    }
-
-    return sharedHighlighterPromise;
-  }
-
-  async function getHighlighter(lang?: string) {
-    const key = String(lang || '')
-      .trim()
-      .toLowerCase();
-    if (!key) return getSharedHighlighter();
-
-    if (!perLanguageHighlighterCache.has(key)) {
-      perLanguageHighlighterCache.set(key, createHighlighterForLang(key));
-    }
-    return perLanguageHighlighterCache.get(key)!;
-  }
-
-  return {
-    getHighlighter,
-    resolveLang,
-    resolveTheme,
-  };
+  resolver.of = (theme?: TKeys) =>
+    theme
+      ? [loaders[theme]]
+      : Object.values<ThemeLoader>(loaders).map((loader) => loader);
+  resolver.loaders = loaders;
+  return resolver as unknown as ThemeResolver<TKeys>;
 }

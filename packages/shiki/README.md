@@ -1,410 +1,271 @@
 # @cmshiki/shiki
 
-把 Shiki 高亮能力接到 CodeMirror 的底层扩展包，“兼容默认按需加载”的开箱体验。
+把一个已经初始化好的 Shiki highlighter 接到 CodeMirror。
+
+在线示例：<https://uxiew.github.io/codemirror-shiki/>
+
+## 这个包解决什么问题
+
+- 你已经自己控制了 `createHighlighterCore()`，只需要把高亮扩展挂进 CodeMirror
+- 你希望保留 fine-grained bundle，而不是让库内部偷偷创建 highlighter
+- 你需要在运行时切换语言或主题，并按需动态加载 grammar / theme
+
+如果你想直接拿一个现成编辑器实例，请用 `@cmshiki/editor`。
 
 ## 安装
 
 ```bash
 pnpm add @cmshiki/shiki
-```
-
-Peer 依赖：
-
-```bash
 pnpm add @codemirror/state @codemirror/view shiki
 ```
+
+## 当前设计约束
+
+当前版本是单入口、显式 highlighter 设计：
+
+- 必须显式传入 `highlighter`
+- 库内不再负责创建 highlighter
+- 推荐业务侧缓存并复用同一个 highlighter
+
+这样做的原因是：
+
+- 更贴近 Shiki 官方推荐的 highlighter cache 模式
+- 能保住 fine-grained bundle
+- 不把运行时兼容性决策绑死在库内部
+
+## 公开导出
+
+- `shikiToCodeMirror(options)`
+- `createLangResolver(loaders)`
+- `createThemeResolver(loaders)`
+- `themeCompartment`
+- `updateEffect`
+- `configsFacet`
+- `ShikiHighlighter`
+- 类型：`Options`、`ShikiToCMOptions`、`ThemeRegistry`、`ThemeKey`、`Highlighter`
 
 ## 快速开始
 
 ```ts
-import { EditorView } from "@codemirror/view";
-import { shikiToCodeMirror } from "@cmshiki/shiki";
+import { EditorView } from '@codemirror/view'
+import { createHighlighterCore } from 'shiki/core'
+import { createOnigurumaEngine } from 'shiki/engine/oniguruma'
+import javascript from '@shikijs/langs/javascript'
+import githubDark from '@shikijs/themes/github-dark'
+import githubLight from '@shikijs/themes/github-light'
+import { shikiToCodeMirror } from '@cmshiki/shiki'
+
+const highlighter = await createHighlighterCore({
+  langs: [javascript],
+  themes: [githubDark, githubLight],
+  engine: createOnigurumaEngine(import('shiki/wasm')),
+})
 
 const { shiki } = await shikiToCodeMirror({
-  lang: "typescript",
+  highlighter,
+  lang: 'javascript',
   themes: {
-    light: "github-light",
-    dark: "github-dark",
+    light: 'github-light',
+    dark: 'github-dark',
   },
-  defaultColor: "light",
-  themeStyle: "cm",
-  engine: "oniguruma", // or "javascript"
-});
+  defaultColor: 'dark',
+  themeStyle: 'cm',
+})
 
 new EditorView({
-  parent: document.getElementById("editor")!,
-  doc: "const n: number = 1;",
+  parent: document.getElementById('editor')!,
+  doc: 'const answer = 42',
   extensions: [shiki],
-});
+})
 ```
 
-## 主题切换
+## `shikiToCodeMirror(options)`
 
-```ts
-import { themeCompartment } from "@cmshiki/shiki";
+把一个已经存在的 Shiki highlighter 变成 CodeMirror 扩展。
 
-const { shiki, getTheme } = await shikiToCodeMirror({
-  lang: "javascript",
-  themes: { light: "github-light", dark: "github-dark" },
-});
+返回值：
 
-// ...创建 EditorView 后
-view.dispatch({
-  effects: themeCompartment.reconfigure(getTheme("dark", view)),
-});
-```
+- `shiki`
+  - 直接放进 `EditorView` 的 `extensions`
+- `getTheme(name?, view?)`
+  - 根据运行时主题 key 返回 CodeMirror 主题扩展
 
-## 主要配置
-
-`shikiToCodeMirror(options)` 支持以下常用字段：
-
-- `lang`：语言名或自定义 language 输入
-  - 也支持语言数组（例如 `@shikijs/langs/*` 的默认导出）
-  - 传数组时会自动归一化，首项作为当前高亮语言，其余作为预加载语言
-- `theme`：单主题简写；当未传 `themes` 时，会映射到 `themes.light`
-- `themes`：多主题映射对象，支持 `light` / `dark` 及任意别名（推荐）
-- `defaultColor`：初始主题键，必须是 `themes` 的 key，默认 `light`
-- `themeStyle`：`"cm"` 或 `"shiki"`，默认 `"cm"`
-- `engine`：
-  - `"oniguruma"`（默认）：兼容性更高
-  - `"javascript"`：使用 Shiki 默认的 JavaScript 引擎参数
-  - `{ type: "javascript", options: { target: "ES2018" } }`：显式指定兼容目标
-  - 自定义 `RegexEngine`
-- `highlighter`：预初始化的 Shiki highlighter（传入后跳过内部初始化）
-  - 推荐配合 `createHighlighterManager().getHighlighter(lang)` 做动态语言切换
-- `resolveLanguage`：未传 `highlighter` 时，语言字符串无法直接加载的兜底解析器（动态 import）
-- `resolveTheme`：未传 `highlighter` 时，主题字符串无法直接加载的兜底解析器（动态 import）
-- `versionGuard`：共享 highlighter 版本/形态护栏，默认 `true`
-
-## “动态语言 + 多编辑器 + 懒加载”场景
-
-- `createHighlighterManager(options)`：
-  - 底层统一托管 `getHighlighter(lang?)`
-  - 同时暴露 `resolveLanguage` / `resolveTheme`
-  - 适合 `@cmshiki/shiki/core` + 精细打包场景（推荐入口）
-
-低阶可选 API（按需使用）：
-
-- `createCachedLangResolver(loaders)`：语言动态 import 缓存 resolver
-- `createCachedThemeResolver(loaders)`：主题动态 import 缓存 resolver
-
-## 缓存方案使用场景
-
-建议使用 `createHighlighterManager` 的场景：
-
-- 多编辑器并行挂载（同语言/主题会被重复请求）
-- 语言或主题会频繁切换
-- 大型项目中同一页面反复进入/离开
-- 需要稳定首帧和减少重复 `import` / `loadLanguage` 开销
-
-可以不使用缓存 API 的场景：
-
-- 单编辑器、单语言、几乎不切换主题
-- 明确接受每次触发时重复动态 import 成本
-
-关键点：
-
-- 不使用缓存 API 也能动态按需加载
-- manager 主要解决“重复加载、并发去重、初始化抖动”，不是动态加载的前置条件
-
-无缓存动态加载示例（可用）：
-
-```ts
-const { shiki } = await shikiToCodeMirror({
-  lang: "typescript",
-  themes: { dark: "github-dark", light: "github-light" },
-  resolveLanguage: async (lang) => {
-    if (lang === "typescript") return (await import("@shikijs/langs/typescript")).default;
-    if (lang === "javascript") return (await import("@shikijs/langs/javascript")).default;
-    return undefined;
-  },
-  resolveTheme: async (theme) => {
-    if (theme === "github-dark") return (await import("@shikijs/themes/github-dark")).default;
-    if (theme === "github-light") return (await import("@shikijs/themes/github-light")).default;
-    return undefined;
-  },
-});
-```
-
-## API 说明
-
-### `createHighlighterManager`
-
-```ts
-function createHighlighterManager(options: {
-  langLoaders?: Record<string, () => Promise<any>>;
-  themeLoaders: Record<string, () => Promise<any>>;
-  preloadLang?: string;
-  preloadThemes: readonly string[];
-  langAlias?: Record<string, string>;
-  engine: "oniguruma" | "javascript" | { type: "javascript"; options?: object } | RegexEngine | Promise<RegexEngine>;
-  warnings?: boolean;
-}): {
-  getHighlighter: (lang?: string) => Promise<ShikiInternal<never, never>>;
-  resolveLang: (lang: string) => Promise<LanguageInput[] | undefined>;
-  resolveTheme: (theme: string) => Promise<ThemeInput | undefined>;
-};
-```
-
-### 低阶缓存 API（可选）
-
-```ts
-function createCachedLangResolver(
-  loaders: Record<string, () => Promise<any>>,
-): (lang: string) => Promise<LanguageInput[] | undefined>;
-
-function createCachedThemeResolver(
-  loaders: Record<string, () => Promise<any>>,
-): (theme: string) => Promise<ThemeInput | undefined>;
-```
-
-说明：
-
-- `createHighlighterManager` 现在要求显式传 `engine`。
-- 这是为了对齐 `shiki/core` 的 fine-grained 语义。
-- `preloadThemes` 至少 1 项；建议把默认展示主题都预热进去。
-
-## `theme` / `themes` / `defaultColor` 关系说明
-
-### 1) 三者职责
-
-- `theme`：单主题输入，适合只需要一个主题的场景。
-- `themes`：主题注册表，键是业务侧可切换的“主题键”（例如 `light` / `dark` / `nord`），值是 Shiki 主题名或主题对象。
-- `defaultColor`：初始主题键，只在 `themes` 的键空间内生效。
-
-### 2) 推荐规则
-
-- 只用单主题：传 `theme`，不传 `themes` / `defaultColor`。
-- 需要主题切换：只用 `themes + defaultColor`，不再传 `theme`。
-- `defaultColor` 必须指向 `themes` 中存在的 key（例如 `dark`）。
-- 如果 `defaultColor` 非法，库会告警并自动回退到可用 key（优先 `dark`、其次 `light`，否则第一个 key）。
-
-
-### 3) 推荐示例（可切换）
+典型主题切换：
 
 ```ts
 const { shiki, getTheme } = await shikiToCodeMirror({
-  lang: "javascript",
+  highlighter,
+  lang: 'typescript',
   themes: {
-    light: "github-light",
-    dark: "github-dark",
-    nord: "nord",
+    light: 'github-light',
+    dark: 'github-dark',
   },
-  defaultColor: "dark",
-  themeStyle: "cm",
-  engine: "javascript",
-});
+  defaultColor: 'dark',
+})
+
+const view = new EditorView({
+  parent: el,
+  doc: code,
+  extensions: [shiki],
+})
+
+view.dispatch({
+  effects: themeCompartment.reconfigure(getTheme('light', view)),
+})
 ```
 
-### 4) 单主题示例（不切换）
+## `Options` 参数说明
+
+### 必填项
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `highlighter` | `Highlighter` | 预初始化的 Shiki highlighter。没有它就不会工作。 |
+| `theme` 或 `themes` | `ThemeInput` 或 `Record<string, ThemeInput>` | 至少提供一个。运行时切主题时推荐 `themes`。 |
+
+### 核心字段
+
+| 字段 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `lang` | `LanguageInput \| string` | `'text'` | 当前激活语言 |
+| `theme` | `ThemeInput` | 无 | 单主题快捷写法 |
+| `themes` | `Record<string, ThemeInput>` | 无 | 运行时主题注册表 |
+| `defaultColor` | `ThemeKey \| string \| false` | `'light'` | 初始主题 key |
+| `themeStyle` | `'cm' \| 'shiki'` | `'shiki'` | 编辑器场景通常更推荐 `cm` |
+| `warnings` | `boolean` | `true` | 是否输出警告 |
+| `versionGuard` | `boolean` | `true` | highlighter 兼容性校验 |
+
+### 动态加载相关
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `resolveLang` | `LangResolver` | 运行时切到未预装语言时，负责补 grammar |
+| `resolveTheme` | `ThemeResolver` | 运行时切到未预装主题时，负责补 theme |
+| `langAlias` | `Record<string, string>` | 语言别名映射，例如 `{ vue: 'html' }` |
+
+### 渲染细节
+
+| 字段 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `cssVariablePrefix` | `string` | `'--shiki-'` | CSS 变量前缀 |
+| `includeExplanation` | `boolean` | `false` | 是否保留 explanation |
+| `tokenizeMaxLineLength` | `number` | `20000` | 超长行保护 |
+| `tokenizeTimeLimit` | `number` | `500` | 单次 tokenization 时间上限 |
+
+## `createLangResolver(loaders)`
+
+创建运行时语言加载器。
 
 ```ts
-const { shiki } = await shikiToCodeMirror({
-  lang: "javascript",
-  theme: "github-dark",
-  themeStyle: "cm",
-  engine: "javascript",
-});
+const resolveLang = createLangResolver({
+  javascript: () => import('@shikijs/langs/javascript'),
+  typescript: () => import('@shikijs/langs/typescript'),
+  json: () => import('@shikijs/langs/json'),
+})
 ```
 
-## 预初始化 highlighter（推荐多编辑器场景）
+推荐用法有两类：
+
+1. 作为 `resolveLang` 传给 `shikiToCodeMirror`，让运行时切语言时自动补 grammar
+2. 在初始化 highlighter 前，手动 `await resolveLang('javascript')`，拿到首屏语言模块
 
 ```ts
-import { createHighlighterCore } from "shiki/core";
-import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
-import { shikiToCodeMirror } from "@cmshiki/shiki";
+const initialLang = await resolveLang('javascript')
 
 const highlighter = await createHighlighterCore({
-  themes: [import("@shikijs/themes/github-dark")],
-  langs: [import("@shikijs/langs/javascript")],
-  engine: createJavaScriptRegexEngine(),
-});
-
-const { shiki } = await shikiToCodeMirror({
-  highlighter,
-  lang: "javascript",
-  themes: { dark: "github-dark", light: "github-light" },
-});
-```
-
-如果你使用的是 `@shikijs/langs/*` 默认导出（可能是数组），可以直接传给 `lang`：
-
-```ts
-import jsLang from "@shikijs/langs/javascript";
-
-const { shiki } = await shikiToCodeMirror({
-  highlighter,
-  lang: jsLang, // 语言对象或语言对象数组都可
-  themes: { dark: "github-dark", light: "github-light" },
-});
-```
-
-## 入口选择（避免混淆）
-
-先看这条规则：
-
-1. 你要“开箱即用、自动按需加载”：
-   - 用 `@cmshiki/shiki`
-2. 你要“严格精细打包（只保留指定语言/主题）”：
-   - 用 `@cmshiki/shiki/core` + `createHighlighterCore(...)`
-
-原因（已在 `tests/fine-bundle` 实测）：
-
-- 使用 `@cmshiki/shiki/core` 时，只会打包你显式传入的语言/主题。
-- 把同一份代码的入口改成 `@cmshiki/shiki` 后，会额外产出大量语言/主题 chunk（因为默认入口包含 bundled loader 路径）。
-
-## 性能与打包建议（对齐 Shiki Best Performance）
-
-项目支持两种模式：
-
-1. 默认模式：传 `lang/theme(s)`，库内部按需加载。
-2. 高性能模式：传入你自己预初始化的 `highlighter`（推荐生产）。
-
-当你需要像 `shiki/core` 一样严格控制语言/主题打包时，适合生产环境性能治理，建议在启动时预加载常用语言和主题，减少首次切换延迟：
-
-```ts
-import { shikiToCodeMirror } from "@cmshiki/shiki/core";
-import { createHighlighterCore } from "shiki/core";
-import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
-import js from "@shikijs/langs/javascript";
-import ts from "@shikijs/langs/typescript";
-import githubDark from "@shikijs/themes/github-dark";
-import githubLight from "@shikijs/themes/github-light";
-
-const highlighter = await createHighlighterCore({
-  langs: [js, ts],
+  langs: Array.isArray(initialLang) ? initialLang : [initialLang],
   themes: [githubDark, githubLight],
-  engine: createJavaScriptRegexEngine(),
-});
-
-const { shiki } = await shikiToCodeMirror({
-  highlighter,
-  lang: "typescript",
-  themes: { dark: "github-dark", light: "github-light" },
-  defaultColor: "dark",
-});
+  engine: createOnigurumaEngine(import('shiki/wasm')),
+})
 ```
 
-说明：
+## `createThemeResolver(loaders)`
 
-- `@cmshiki/shiki/core` 不会走 `bundledLanguages/bundledThemes` 自动加载路径。
-- 未传 `highlighter` 时会抛出明确错误，提示改用 core 模式的显式预加载。
-- 若你在业务里写 `import { bundledLanguages } from "shiki"`，构建器仍可能产出大量语言/theme chunk。
-- 真正精细打包请使用显式模块导入：`@shikijs/langs/<name>`、`@shikijs/themes/<name>`。
+创建运行时主题加载器。
 
-## JavaScript 引擎运行时兼容 
+```ts
+const resolveTheme = createThemeResolver({
+  'github-dark': () => import('@shikijs/themes/github-dark'),
+  'github-light': () => import('@shikijs/themes/github-light'),
+})
+```
 
-`createJavaScriptRegexEngine()` 默认目标会产出 `v` flag，你当前运行时不支持，触发 `Invalid flags ... dgv`。
+它同样适合两类场景：
 
-JavaScript 引擎运行时兼容：
-- 底层自动检测 `RegExp` 是否支持 `v/d`。  
-- 不支持时，显式传兼容目标：`engine: { type: "javascript", options: { target: "ES2018" } }`。
+- 传给 `shikiToCodeMirror`，在运行时补主题
+- 在初始化 highlighter 前，手动先拿到首批主题
 
-## 4) 动态加载推荐（manager 优先）
-
-`core` 模式推荐使用 `createHighlighterManager`，按语言获取 highlighter：
+## 动态语言 / 主题切换
 
 ```ts
 import {
-  createHighlighterManager,
+  createLangResolver,
+  createThemeResolver,
   shikiToCodeMirror,
-} from "@cmshiki/shiki/core";
+  updateEffect,
+  themeCompartment,
+} from '@cmshiki/shiki'
+import { createHighlighterCore } from 'shiki/core'
+import { createOnigurumaEngine } from 'shiki/engine/oniguruma'
 
-const manager = createHighlighterManager({
-  languageLoaders: {
-    javascript: () => import("@shikijs/langs/javascript"),
-    typescript: () => import("@shikijs/langs/typescript"),
-    json: () => import("@shikijs/langs/json"),
-  },
-  themeLoaders: {
-    "github-dark": () => import("@shikijs/themes/github-dark"),
-    "github-light": () => import("@shikijs/themes/github-light"),
-  },
-  preloadLanguage: "javascript",
-  preloadThemes: ["github-dark", "github-light"],
-  engine: "oniguruma",
-});
+const resolveLang = createLangResolver({
+  javascript: () => import('@shikijs/langs/javascript'),
+  typescript: () => import('@shikijs/langs/typescript'),
+  json: () => import('@shikijs/langs/json'),
+})
 
-const highlighter = await manager.getHighlighter("typescript");
+const resolveTheme = createThemeResolver({
+  'github-dark': () => import('@shikijs/themes/github-dark'),
+  'github-light': () => import('@shikijs/themes/github-light'),
+})
 
-const { shiki } = await shikiToCodeMirror({
+const initialLang = await resolveLang('javascript')
+const darkTheme = await resolveTheme('github-dark')
+const lightTheme = await resolveTheme('github-light')
+
+const highlighter = await createHighlighterCore({
+  langs: Array.isArray(initialLang) ? initialLang : [initialLang],
+  themes: [darkTheme, lightTheme].filter(Boolean),
+  engine: createOnigurumaEngine(import('shiki/wasm')),
+})
+
+const { shiki, getTheme } = await shikiToCodeMirror({
   highlighter,
-  lang: "typescript",
-  themes: { dark: "github-dark", light: "github-light" },
-});
-```
-
-说明：
-
-- 传入 `highlighter` 时，`resolveLanguage/resolveTheme` 会被忽略。
-- 如果要切换语言，请重新获取对应 highlighter：`manager.getHighlighter(lang)`。
-
-如果你不传 `highlighter`（默认入口），可以继续用 resolver 兜底：
-
-```ts
-import {
-  shikiToCodeMirror,
-  createCachedLangResolver,
-  createCachedThemeResolver,
-} from "@cmshiki/shiki";
-
-const resolveLang = createCachedLangResolver({
-    javascript: () => import("@shikijs/langs/javascript"),
-    json: () => import("@shikijs/langs/json"),
-});
-
-const resolveTheme = createCachedThemeResolver({
-  "github-dark": () => import("@shikijs/themes/github-dark"),
-  "github-light": () => import("@shikijs/themes/github-light"),
-});
-
-const { shiki } = await shikiToCodeMirror({
-  lang: "javascript",
-  themes: { dark: "github-dark", light: "github-light" },
+  lang: 'javascript',
   resolveLang,
   resolveTheme,
-});
-```
-
-### 精细打包推荐模板（避免多余 chunk）
-
-```ts
-const manager = createSharedHighlighterManager({
-  languageLoaders: {
-    javascript: () => import("@shikijs/langs/javascript"),
-    typescript: () => import("@shikijs/langs/typescript"),
-    html: () => import("@shikijs/langs/html"),
-    css: () => import("@shikijs/langs/css"),
-    json: () => import("@shikijs/langs/json"),
-    markdown: () => import("@shikijs/langs/markdown"),
+  themes: {
+    dark: 'github-dark',
+    light: 'github-light',
   },
-  themeLoaders: {
-    "github-dark": () => import("@shikijs/themes/github-dark"),
-    "github-light": () => import("@shikijs/themes/github-light"),
-  },
-  preloadLanguage: "javascript",
-  preloadThemes: ["github-dark", "github-light"],
-  engine: { type: "javascript", options: { target: "ES2018" } },
-});
+  defaultColor: 'dark',
+  themeStyle: 'cm',
+})
+
+const view = new EditorView({
+  parent: el,
+  doc: code,
+  extensions: [shiki],
+})
+
+view.dispatch({
+  effects: updateEffect.of({ lang: 'typescript' }),
+})
+
+view.dispatch({
+  effects: themeCompartment.reconfigure(getTheme('light', view)),
+})
 ```
 
-不要这样写（会放大可选集合）：
+## 宿主环境建议
 
-```ts
-import { bundledLanguages, bundledThemes } from "shiki";
-```
+- Web / Electron / uTools 一类运行时，优先用 `createOnigurumaEngine(import('shiki/wasm'))`
+- 不要把 JS regex engine 当默认方案，尤其是在桌面壳或旧 WebView 里
+- 多编辑器场景尽量共用一个 highlighter
 
-## 5) 版本护栏（默认开启）
+## 常见误区
 
-`versionGuard` 默认是 `true`：
-
-- 当传入的 shared highlighter 不是兼容对象（例如缺少关键方法）时会快速抛错
-- 错误信息会明确提示使用 Shiki v3+ 的 `createHighlighter` / `createHighlighterCore`
-- 当捕获到典型版本不匹配异常（例如 `Resolver.getInjections` / `split`）时，会输出“同主版本对齐”的修复提示
-- 推荐将 `shiki`、`@shikijs/langs`、`@shikijs/themes` 保持同一个 major 版本
-- 如需兼容特殊对象，可显式关闭：`versionGuard: false`
-
-## 参考：
-
-- https://shiki.style/guide/best-performance
-- https://shiki.style/guide/install
+- 不传 `highlighter`，指望库内部创建。当前版本不会这样做。
+- 只传 `theme`，却又想运行时切主题。此时应该改成 `themes + defaultColor`。
+- `defaultColor` 传的是主题值，例如 `'github-dark'`。如果 `themes.dark = 'github-dark'`，那就应该传 `'dark'`。
+- 初始语言和运行时语言集合不一致：首帧只预装了 `json`，但又把 `lang` 设为 `javascript` 且没有 `resolveLang`。

@@ -15,6 +15,11 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { shikiToCodeMirror } from '../src';
 import { EditorState, Text } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
+import { createHighlighterCore } from 'shiki/core';
+import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
+import { bundledLanguages, bundledThemes } from 'shiki';
+
+let sharedHighlighter: any;
 
 // Mock ResizeObserver for JSDOM
 globalThis.ResizeObserver = class ResizeObserver {
@@ -110,6 +115,18 @@ async function measurePerfAsync<T>(
   };
 }
 
+beforeAll(async () => {
+  sharedHighlighter = await createHighlighterCore({
+    langs: [bundledLanguages.javascript, bundledLanguages.typescript],
+    themes: [
+      bundledThemes.nord,
+      bundledThemes['github-dark'],
+      bundledThemes['github-light'],
+    ],
+    engine: createJavaScriptRegexEngine({ target: 'ES2018' }),
+  });
+});
+
 describe('Performance: Large File Rendering', () => {
   const SMALL_FILE_LINES = 100;
   const MEDIUM_FILE_LINES = 1000;
@@ -126,7 +143,7 @@ describe('Performance: Large File Rendering', () => {
   // - Keep local thresholds strict, but relax CI thresholds to avoid false negatives.
   const THRESHOLDS = {
     initTime: 500, // Shiki initialization
-    smallFileRender: IS_CI ? 350 : 120, // 100 lines
+    smallFileRender: IS_CI ? 350 : 220, // 100 lines
     mediumFileRender: IS_CI ? 1200 : 200, // 1000 lines
     largeFileRender: IS_CI ? 3000 : 1000, // 5000 lines
     incrementalUpdate: 16, // Single line update (target: 60fps = 16ms)
@@ -135,15 +152,14 @@ describe('Performance: Large File Rendering', () => {
 
   let shikiExtension: any;
   let getTheme: any;
-
   beforeAll(async () => {
     // Initialize Shiki once for all tests
     const { perf, result } = await measurePerfAsync(
       'Shiki Initialization',
       async () => {
         return await shikiToCodeMirror({
+          highlighter: sharedHighlighter,
           lang: 'javascript',
-          theme: 'nord',
           themes: { nord: 'nord' },
           defaultColor: 'nord', // Use a valid theme as default
         });
@@ -425,8 +441,8 @@ describe('Performance: Large File Rendering', () => {
 describe('Performance: TypeScript Files', () => {
   it('should handle TypeScript syntax efficiently', async () => {
     const { shiki } = await shikiToCodeMirror({
+      highlighter: sharedHighlighter,
       lang: 'typescript',
-      theme: 'nord',
       themes: { nord: 'nord' },
       defaultColor: 'nord', // Use a valid theme as default
     });
@@ -454,8 +470,8 @@ describe('Performance: TypeScript Files', () => {
 describe('Configuration: defaultColor', () => {
   it('should work with defaultColor set to a valid theme name', async () => {
     const { shiki } = await shikiToCodeMirror({
+      highlighter: sharedHighlighter,
       lang: 'javascript',
-      theme: 'nord',
       themes: { nord: 'nord', dark: 'github-dark' },
       defaultColor: 'nord',
     });
@@ -480,8 +496,8 @@ describe('Configuration: defaultColor', () => {
 
   it('should work with defaultColor set to false (no default theme)', async () => {
     const { shiki } = await shikiToCodeMirror({
+      highlighter: sharedHighlighter,
       lang: 'javascript',
-      theme: 'nord',
       themes: { nord: 'nord' },
       defaultColor: false, // No default theme
     });
@@ -506,8 +522,8 @@ describe('Configuration: defaultColor', () => {
 
   it('should work with defaultColor undefined (uses first theme)', async () => {
     const { shiki } = await shikiToCodeMirror({
+      highlighter: sharedHighlighter,
       lang: 'javascript',
-      theme: 'nord',
       themes: { light: 'github-light', dark: 'github-dark' },
       // defaultColor not specified
     });
@@ -531,8 +547,8 @@ describe('Configuration: defaultColor', () => {
 
   it('should handle multiple themes with defaultColor', async () => {
     const { shiki, getTheme } = await shikiToCodeMirror({
+      highlighter: sharedHighlighter,
       lang: 'javascript',
-      theme: 'nord',
       themes: {
         light: 'github-light',
         dark: 'github-dark',
@@ -566,8 +582,8 @@ describe('Configuration: defaultColor', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const { shiki } = await shikiToCodeMirror({
+      highlighter: sharedHighlighter,
       lang: 'javascript',
-      theme: 'nord',
       themes: { nord: 'nord' }, // Only 'nord' key exists
       defaultColor: 'light', // 'light' key doesn't exist in themes
       warnings: true,

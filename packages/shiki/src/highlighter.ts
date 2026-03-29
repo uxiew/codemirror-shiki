@@ -1,15 +1,12 @@
 import { Text } from '@codemirror/state';
 import { Decoration } from '@codemirror/view';
-import { type GrammarState } from '@shikijs/core';
-import { createStyleModuleName, mountStyles } from '@cmshiki/utils';
+import { newStyleModuleName, mountStyles } from '@cmshiki/utils';
 
-import type { Highlighter, ShikiToCMOptions } from './types/types';
+import type { GrammarState } from './types/shiki.types';
+import type { Highlighter, ShikiToCMOptions, InitShikiFn } from './types/types';
 import { toStyleObject } from './utils';
-import { Base, type InitShikiFn } from './base';
-import {
-  getPrimaryRuntimeLang,
-  getRuntimeLangLabel,
-} from './language-normalize';
+import { Base } from './base';
+import { getPrimaryRuntimeLangId, getRuntimeLangLabel } from './lang-normalize';
 
 // Decode vscode-textmate encoded token metadata without importing
 // `@shikijs/vscode-textmate` at runtime (avoids bundler resolution issues).
@@ -99,7 +96,7 @@ export class ShikiHighlighter extends Base {
   // Cache grammar state for every line to enable incremental parsing
   private grammarStateCache = new Map<number, GrammarState>();
   private lastCachedLine = 0;
-  private internal: any = null; // Use any to avoid complex ShikiInternal type issues
+  private internal: Highlighter;
   private isCoreUpdating = false;
 
   constructor(
@@ -167,19 +164,19 @@ export class ShikiHighlighter extends Base {
       return { produced, nextFrom };
     }
 
-    const lang = getPrimaryRuntimeLang(this.configs.lang);
+    const langId = getPrimaryRuntimeLangId(this.configs.lang);
     const themeAlias = this.currentTheme;
     const internal = this.internal;
 
-    if (!lang) {
+    if (!langId) {
       if (this.configs.warnings) {
-        console.warn('highlight: language is not configured');
+        console.warn('highlight: lang is not configured');
       }
       return { produced, nextFrom };
     }
 
     // Debug
-    // console.log(`highlight: lang=${lang} themeAlias=${themeAlias}`)
+    // console.log(`highlight: langId=${langId} themeAlias=${themeAlias}`)
 
     const validTheme = this.configs.themes[themeAlias];
 
@@ -206,11 +203,11 @@ export class ShikiHighlighter extends Base {
     const { colorMap } = (internal as any).setTheme(finalThemeName);
     let grammar: any;
     try {
-      grammar = internal.getLanguage(lang);
+      grammar = internal.getLanguage(langId);
     } catch (error) {
       if (this.configs.warnings) {
         console.warn(
-          `highlight: language '${String(lang)}' is not ready yet, skip this frame`,
+          `highlight: lang '${String(langId)}' is not ready yet, skip this frame`,
           error,
         );
       }
@@ -218,7 +215,9 @@ export class ShikiHighlighter extends Base {
     }
     if (!grammar) {
       if (this.configs.warnings) {
-        console.warn(`highlight: grammar not found for lang=${String(lang)}`);
+        console.warn(
+          `highlight: grammar not found for langId=${String(langId)}`,
+        );
       }
       return { produced, nextFrom };
     }
@@ -274,8 +273,9 @@ export class ShikiHighlighter extends Base {
 
     // 3. Tokenize visible lines and emit decorations
     let cmClasses: Record<string, string> = {};
+    const langLabel = getRuntimeLangLabel(this.configs.lang);
     this.view!.dom.classList.toggle(
-      'lang-' + getRuntimeLangLabel(lang).replace(/[^\w-]/g, '_'),
+      'lang-' + langLabel.replace(/[^\w-]/g, '_'),
       true,
     );
 
@@ -326,7 +326,7 @@ export class ShikiHighlighter extends Base {
         if (fontStyle & 4) style += ';text-decoration:underline';
 
         // dedupe and cache the style
-        const cls = cmClasses[style] || createStyleModuleName();
+        const cls = cmClasses[style] || newStyleModuleName();
         cmClasses[style] = cls;
 
         // convert to CodeMirror decoration

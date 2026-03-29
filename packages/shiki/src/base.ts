@@ -11,16 +11,13 @@ import type {
   Highlighter,
   Options,
   ShikiToCMOptions,
+  InitShikiFn,
 } from './types/types';
 import type { StringLiteralUnion } from './types/shiki.types';
 
 export const themeCompartment = new Compartment();
 
 type ThemeName = BaseOptions['theme'] | StringLiteralUnion<'light' | 'dark'>;
-
-export type InitShikiFn = (
-  options: Omit<Options, 'theme' | 'themeStyle'>,
-) => Promise<Highlighter>;
 
 export const configsFacet = Facet.define<ShikiToCMOptions, ShikiToCMOptions>({
   combine: (values) =>
@@ -92,16 +89,10 @@ export class Base {
   }
 
   async update(options: Options, view: any) {
-    if (options.theme) {
-      options.themes = options.themes || {
-        ...this.configs.themes,
-        light: options.theme,
-      };
-    }
-
     const _configs = {
       ...this.configs,
     };
+
     // THINK: merge or override?
     this.configs = {
       ...this.configs,
@@ -118,7 +109,8 @@ export class Base {
       (options.langAlias !== undefined &&
         JSON.stringify(_configs.langAlias) !==
           JSON.stringify(options.langAlias)) ||
-      (options.engine !== undefined && _configs.engine !== options.engine) ||
+      (options.highlighter !== undefined &&
+        _configs.highlighter !== options.highlighter) ||
       (options.warnings !== undefined &&
         _configs.warnings !== options.warnings);
 
@@ -159,7 +151,7 @@ export class Base {
       const name = themes[color];
       if (!name) throw new Error(`'${name}' theme is not registered!`);
       // internal handled cached
-      const { colors, bg, fg, type } = this.shikiCore.getTheme(name as any);
+      const { colors, bg, fg, type } = this.shikiCore.getTheme(name as string);
       let settings: CreateThemeOptions['settings'] = {
         background: bg,
         foreground: fg,

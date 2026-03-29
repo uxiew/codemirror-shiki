@@ -1,8 +1,6 @@
-import type { Options, ShikiToCMOptions } from './types/types';
+import type { Options, ShikiToCMOptions, InitShikiFn } from './types/types';
 import defaultOptions from './config';
 import { shikiPlugin } from './plugin';
-
-type InitShikiFn = (options: ShikiToCMOptions) => Promise<any>;
 
 export async function createShikiToCodeMirror(
   sourceTag: string,
@@ -10,7 +8,8 @@ export async function createShikiToCodeMirror(
   initShikiFn: InitShikiFn,
 ) {
   const normalizedOptions = { ...shikiOptions };
-  const { theme, themes } = normalizedOptions;
+  const { theme, themes } = normalizedOptions as any;
+
   if (!themes) {
     if (theme) {
       normalizedOptions.themes = {

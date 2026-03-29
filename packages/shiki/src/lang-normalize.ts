@@ -1,8 +1,8 @@
 import type { LanguageInput } from './types/shiki.types';
 
-export type RuntimeLanguageInput = string | LanguageInput;
+export type RuntimeLangInput = string | LanguageInput;
 
-function pushNormalized(value: unknown, output: RuntimeLanguageInput[]): void {
+function pushNormalized(value: unknown, output: RuntimeLangInput[]): void {
   if (value == null) return;
 
   if (Array.isArray(value)) {
@@ -23,26 +23,26 @@ function pushNormalized(value: unknown, output: RuntimeLanguageInput[]): void {
 }
 
 /**
- * Normalize unknown language inputs to runtime-supported values.
+ * Normalize unknown lang inputs to runtime-supported values.
  * Supports string/object and nested array forms.
  */
-export function normalizeRuntimeLangs(value: unknown): RuntimeLanguageInput[] {
-  const output: RuntimeLanguageInput[] = [];
+export function normalizeRuntimeLangs(value: unknown): RuntimeLangInput[] {
+  const output: RuntimeLangInput[] = [];
   pushNormalized(value, output);
   return output;
 }
 
 /**
- * Pick the primary language from normalized runtime language inputs.
+ * Pick the primary lang from normalized runtime lang inputs.
  */
 export function getPrimaryRuntimeLang(
   value: unknown,
-): RuntimeLanguageInput | undefined {
+): RuntimeLangInput | undefined {
   return normalizeRuntimeLangs(value)[0];
 }
 
 /**
- * Human-readable language label for logs/debugging.
+ * Human-readable lang label for logs/debugging.
  */
 export function getRuntimeLangLabel(value: unknown): string {
   if (typeof value === 'string') return value;
@@ -53,11 +53,21 @@ export function getRuntimeLangLabel(value: unknown): string {
     if (typeof scopeName === 'string' && scopeName.length > 0) {
       return scopeName;
     }
-    return 'custom-language';
+    return 'custom-lang';
   }
   if (Array.isArray(value)) {
     const labels = normalizeRuntimeLangs(value).map(getRuntimeLangLabel);
-    return labels.join(', ') || 'unknown-language';
+    return labels.join(', ') || 'unknown-lang';
   }
-  return 'unknown-language';
+  return 'unknown-lang';
+}
+
+/**
+ * Get the unique lang ID from normalized runtime lang inputs.
+ */
+export function getPrimaryRuntimeLangId(value: unknown): string | undefined {
+  const primary = getPrimaryRuntimeLang(value);
+  if (!primary) return undefined;
+  if (typeof primary === 'string') return primary;
+  return (primary as any).name || (primary as any).scopeName || 'custom-lang';
 }

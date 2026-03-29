@@ -20,7 +20,7 @@ codemirror-shiki stably integrates the syntax highlighting capabilities of Shiki
 
 补充：
 
-- `@cmshiki/shiki` / `@cmshiki/editor` 新增 resolver 机制（`resolveLanguage` / `resolveTheme`）来减少业务侧动态 import 样板代码。
+- `@cmshiki/shiki` 采用单入口设计：需要业务侧预创建 `highlighter` 并传入。
 - 默认开启 `versionGuard`，对不兼容的 shared highlighter 快速失败并给出明确错误提示。
 
 文档入口：
@@ -30,8 +30,8 @@ codemirror-shiki stably integrates the syntax highlighting capabilities of Shiki
 
 推荐阅读顺序：
 
-1. 先看 `@cmshiki/shiki` 的“入口选择 + 精细打包模板”
-2. 再看 `@cmshiki/editor` 的“core 模式接入模板”
+1. 先看 `@cmshiki/shiki` 的“highlighter 预初始化 + 精细打包模板”
+2. 再看 `@cmshiki/editor` 的“ShikiEditor 接入模板”
 
 ## 快速开始
 

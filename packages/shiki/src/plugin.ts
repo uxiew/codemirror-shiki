@@ -1,6 +1,6 @@
 import { shikiViewPlugin } from './viewPlugin';
-import type { Highlighter, ShikiToCMOptions } from './types/types';
-import { themeCompartment, type InitShikiFn } from './base';
+import type { Highlighter, ShikiToCMOptions, InitShikiFn } from './types/types';
+import { themeCompartment } from './base';
 import { type EditorView } from '@codemirror/view';
 import { ShikiHighlighter } from './highlighter';
 

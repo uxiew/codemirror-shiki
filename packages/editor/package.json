@@ -24,30 +24,28 @@
     "react"
   ],
   "sideEffects": false,
+  "type": "module",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.mts",
   "exports": {
     ".": {
       "import": "./dist/index.mjs",
-      "types": "./dist/index.d.ts"
-    },
-    "./core": {
-      "import": "./dist/core.mjs",
-      "types": "./dist/core.d.ts"
+      "types": "./dist/index.d.mts"
     }
   },
   "scripts": {
+    "dev": "tsdown --watch",
+    "build": "tsdown",
     "test": "vitest",
-    "dev": "unbuild --stub",
-    "build": "unbuild",
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
     "@cmshiki/shiki": "workspace:^"
   },
-  "devDependencies": {},
   "peerDependencies": {
     "@codemirror/state": "^6.0.0",
-    "@codemirror/view": "^6.0.0",
-    "shiki": "^3.0.0 || ^4.0.0"
+    "@codemirror/view": "^6.0.0"
   },
+  "devDependencies": {},
   "optionalDependencies": {}
 }

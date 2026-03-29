@@ -22,31 +22,25 @@
   ],
   "sideEffects": false,
   "type": "module",
-  "main": "dist/index.cjs",
   "module": "dist/index.mjs",
-  "types": "dist/index.d.ts",
+  "types": "dist/index.d.mts",
   "exports": {
     ".": {
-      "require": "./dist/index.cjs",
       "import": "./dist/index.mjs",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.mts"
     }
   },
   "scripts": {
     "test": "vitest",
-    "dev": "unbuild --stub",
-    "build": "unbuild",
+    "dev": "tsdown --watch",
+    "build": "tsdown",
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
-    "@codemirror/language": "catalog:",
     "@codemirror/state": "catalog:",
-    "@codemirror/view": "catalog:",
-    "@shikijs/core": "catalog:"
+    "@codemirror/view": "catalog:"
   },
   "devDependencies": {
     "style-mod": "catalog:"
-  },
-  "peerDependencies": {},
-  "optionalDependencies": {}
+  }
 }

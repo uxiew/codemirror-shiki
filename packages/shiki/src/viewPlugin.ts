@@ -187,36 +187,33 @@ class ShikiView {
   }
 
   update(update: ViewUpdate) {
-    if (update.docChanged) {
-      // Keep existing decorations aligned immediately with document edits.
-      this.decorations = this.decorations.map(update.changes);
-      this.docChangeHighlight(update);
-      return;
-    }
-    if (update.viewportChanged) {
-      this.handleViewportChanged(update.view);
-      return;
-    }
-    let reconfigured = false;
-    for (let tr of update.transactions) {
-      if (tr.reconfigured) {
-        reconfigured = true;
-      }
-      for (let effect of tr.effects) {
+    let hasUpdateEffect = false;
+    for (const tr of update.transactions) {
+      for (const effect of tr.effects) {
         if (effect.is(updateEffect)) {
+          hasUpdateEffect = true;
           this.shikiHighlighter
             .update(effect.value, update.view)
             .then(() => this.updateHighlight(update.view));
-          return;
         }
       }
     }
-    // Theme compartment reconfigure should also trigger re-highlighting,
-    // even when no explicit updateEffect is found.
-    if (reconfigured) {
+
+    if (update.docChanged) {
+      // Keep existing decorations aligned immediately with document edits.
+      this.decorations = this.decorations.map(update.changes);
+      // If we have an updateEffect, the .then() above will handle the full re-highlight.
+      // Otherwise, we trigger a standard doc-change highlight.
+      if (!hasUpdateEffect) {
+        this.docChangeHighlight(update);
+      }
+    } else if (update.viewportChanged) {
+      this.handleViewportChanged(update.view);
+    } else if (update.transactions.some((tr) => tr.reconfigured)) {
       this.updateHighlight(update.view);
     }
   }
+
 
   private clearDecorations() {
     this.decorations = RangeSet.empty;

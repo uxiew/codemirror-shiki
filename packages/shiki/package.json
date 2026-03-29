@@ -28,38 +28,29 @@
   ],
   "sideEffects": false,
   "type": "module",
-  "main": "dist/index.cjs",
   "module": "dist/index.mjs",
-  "types": "dist/index.d.ts",
+  "types": "dist/index.d.mts",
   "exports": {
     ".": {
-      "require": "./dist/index.cjs",
       "import": "./dist/index.mjs",
-      "types": "./dist/index.d.ts"
-    },
-    "./core": {
-      "require": "./dist/core.cjs",
-      "import": "./dist/core.mjs",
-      "types": "./dist/core.d.ts"
+      "types": "./dist/index.d.mts"
     }
   },
   "scripts": {
+    "dev": "tsdown --watch",
+    "build": "tsdown",
     "test": "vitest",
-    "dev": "unbuild --stub",
-    "build": "unbuild",
     "prepublishOnly": "pnpm build"
   },
   "peerDependencies": {
     "@codemirror/state": "^6.0.0",
-    "@codemirror/view": "^6.0.0",
-    "shiki": "^3.0.0 || ^4.0.0"
+    "@codemirror/view": "^6.0.0"
   },
   "dependencies": {
-    "@cmshiki/utils": "workspace:^",
-    "@shikijs/core": "catalog:"
+    "@cmshiki/utils": "workspace:^"
   },
   "devDependencies": {
+    "@shikijs/types": "catalog:",
     "shiki": "catalog:"
-  },
-  "optionalDependencies": {}
+  }
 }

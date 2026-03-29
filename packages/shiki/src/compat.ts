@@ -3,7 +3,7 @@ const OPTIONAL_SYNC_METHODS = ['loadLanguage', 'loadTheme'];
 
 export function assertCompatibleHighlighter(
   highlighter: unknown,
-  source: '@cmshiki/shiki' | '@cmshiki/shiki/core',
+  source: '@cmshiki/shiki',
   warnings = true,
   enabled = true,
 ): asserts highlighter is Record<string, any> {
@@ -36,7 +36,7 @@ export function assertCompatibleHighlighter(
     console.warn(
       `${source} Shared highlighter misses optional sync methods: ${missingOptional.join(
         ', ',
-      )}. Runtime language/theme sync may be partial.`,
+      )}. Runtime lang/theme sync may be partial.`,
     );
   }
 }

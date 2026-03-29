@@ -5,61 +5,46 @@ import {
   shikiToCodeMirror,
   themeCompartment,
   updateEffect,
-} from '@cmshiki/shiki/core';
+  createLangResolver,
+  createThemeResolver,
+} from '@cmshiki/shiki';
 import { createHighlighterCore } from 'shiki/core';
 import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
 import { languageSamples, mountHarness } from './ui';
 
 const { editorEl, langSelect, themeSelect } = mountHarness(
-  'Core Dynamic (No Cache)',
-  '使用 @cmshiki/shiki/core + 手动动态创建 highlighter（不使用缓存）',
+  'Dynamic Highlighter (Resolver Mode)',
+  '演示 Options.resolveLang / resolveTheme 的用法（按需动态加载）',
 );
 
-const engine = createJavaScriptRegexEngine({ target: 'ES2018' });
+const engine = createJavaScriptRegexEngine();
 
-const languageLoaders = {
+const resolveLang = createLangResolver({
   javascript: () => import('@shikijs/langs/javascript'),
   typescript: () => import('@shikijs/langs/typescript'),
   json: () => import('@shikijs/langs/json'),
-} as const;
+  // markdown: () => import('@shikijs/langs/markdown'),
+});
 
-const themeLoaders = {
+const resolveTheme = createThemeResolver({
   'github-dark': () => import('@shikijs/themes/github-dark'),
   'github-light': () => import('@shikijs/themes/github-light'),
-} as const;
+});
 
-const themesPromise = Promise.all(
-  Object.values(themeLoaders).map((loader) =>
-    loader().then((m) => m.default ?? m),
-  ),
-);
-
-async function loadLang(lang: string) {
-  const loader =
-    languageLoaders[lang as keyof typeof languageLoaders] ||
-    languageLoaders.javascript;
-  const mod = await loader();
-  return mod.default ?? mod;
-}
-
-async function createHighlighterForLang(lang: string) {
-  const [langInput, themes] = await Promise.all([
-    loadLang(lang),
-    themesPromise,
-  ]);
-  return createHighlighterCore({
-    langs: [langInput],
-    themes,
-    engine,
-  });
-}
-
-let languageRequestId = 0;
-const initialHighlighter = await createHighlighterForLang('javascript');
+const initialHighlighter = await createHighlighterCore({
+  langs: [() => import('@shikijs/langs/json')],
+  themes: [
+    resolveTheme.loaders['github-dark'],
+    resolveTheme.loaders['github-light'],
+  ],
+  engine,
+});
 
 const { shiki, getTheme } = await shikiToCodeMirror({
   highlighter: initialHighlighter,
   lang: 'javascript',
+  resolveLang,
+  resolveTheme,
   themes: {
     dark: 'github-dark',
     light: 'github-light',
@@ -80,13 +65,10 @@ const view = new EditorView({
 langSelect.addEventListener('change', async () => {
   const lang = langSelect.value;
   const nextDoc = languageSamples[lang] ?? languageSamples.javascript;
-  const requestId = ++languageRequestId;
-  const highlighter = await createHighlighterForLang(lang);
-  if (requestId !== languageRequestId) return;
 
   view.dispatch({
     changes: { from: 0, to: view.state.doc.length, insert: nextDoc },
-    effects: updateEffect.of({ lang, highlighter }),
+    effects: updateEffect.of({ lang }), // 只需要传新语言，如果未注册，内部会调用 resolveLang 并 load
   });
 });
 

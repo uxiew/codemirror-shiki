@@ -11,6 +11,8 @@ import {
 import type { ShikiEditorOptions } from './types';
 import { partitionOptions } from './utils';
 
+export { createLangResolver, createThemeResolver } from '@cmshiki/shiki';
+
 const shikiComp = new Compartment();
 
 interface PreloadedShiki {
@@ -115,7 +117,7 @@ export class ShikiEditor<TThemes extends ThemeRegistry = ThemeRegistry> {
 
       this.getTheme = Promise.resolve(preloaded.getTheme);
     } else {
-      // 兼容旧的同步构造方式（会有闪烁）
+      // 兼容旧的同步制造方式
       this.view = new EditorView({
         ...cmOptions,
         extensions: Array.isArray(cmOptions.extensions)
@@ -165,7 +167,11 @@ export class ShikiEditor<TThemes extends ThemeRegistry = ThemeRegistry> {
     this.view.destroy();
   }
 
-  update(options: Options) {
+  /**
+   * rerender the editor configs with new options.
+   * @param options
+   */
+  render(options: Options) {
     this.view.dispatch({
       effects: updateEffect.of(options),
     });
@@ -183,13 +189,19 @@ export class ShikiEditor<TThemes extends ThemeRegistry = ThemeRegistry> {
     });
   }
 
-  getValue(): string {
+  /**
+   * Get the editor document content.
+   */
+  getDoc(): string {
     return this.view.state.doc.toString();
   }
 
-  setValue(newCode: string) {
+  /**
+   * Set the editor document content.
+   */
+  setDoc(doc: string) {
     this.view.dispatch({
-      changes: { from: 0, to: this.view.state.doc.length, insert: newCode },
+      changes: { from: 0, to: this.view.state.doc.length, insert: doc },
     });
   }
 }
