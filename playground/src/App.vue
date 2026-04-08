@@ -206,6 +206,26 @@
             ></span>
             <span class="font-semibold">{{ currentCodeTitle }}</span>
           </div>
+          <button
+            class="rounded border border-gray-600 px-2 py-1 text-[11px] font-medium text-gray-200 transition-colors hover:border-gray-400 hover:bg-gray-700/60"
+            @click="copyCurrentCode"
+          >
+            {{ isCodeCopied ? "已复制" : "复制示例" }}
+          </button>
+        </div>
+        <div
+          class="flex flex-wrap items-center gap-2 border-b border-gray-800 bg-[#1b222c] px-3 py-2 text-[11px] text-gray-300"
+        >
+          <span
+            v-for="item in currentCodeMeta"
+            :key="item.label"
+            class="rounded-full border border-gray-700 bg-gray-800/80 px-2.5 py-1 font-medium"
+          >
+            {{ item.label }}: {{ item.value }}
+          </span>
+          <span class="text-gray-400">
+            切换引擎时建议重建 highlighter，而不是运行时热切换。
+          </span>
         </div>
         <div class="flex-auto min-h-0 relative">
           <CodeMirror class="absolute inset-0 text-sm" v-bind="configCmProps" />
@@ -235,6 +255,7 @@ const appMode = useStorage<AppMode>("tm-mode", "editor");
 const searchGrammar = ref("");
 const searchTheme = ref("");
 const perfMs = ref(0);
+const isCodeCopied = ref(false);
 
 const cmProps = reactive<CMProps>({
   lang: {
@@ -265,56 +286,93 @@ const currentCodeTitle = computed(() => {
   return "使用 @cmshiki/editor 的开箱即用方式";
 });
 
+const currentGrammarDisplayName = computed(
+  () =>
+    grammars.find((item) => item.name === cmProps.lang.name)?.displayName ||
+    cmProps.lang.name,
+);
+
+const currentThemeDisplayName = computed(
+  () =>
+    themes.find((item) => item.name === cmProps.theme.name)?.displayName ||
+    cmProps.theme.name,
+);
+
+const currentEngineFactory = computed(() =>
+  cmProps.engine === "javascript"
+    ? "createJavaScriptRegexEngine()"
+    : "createOnigurumaEngine(() => import('shiki/wasm'))",
+);
+
+const currentCodeMeta = computed(() => [
+  { label: "模式", value: cmProps.mode === "editor" ? "ShikiEditor" : "shiki" },
+  { label: "语法", value: currentGrammarDisplayName.value },
+  { label: "主题", value: currentThemeDisplayName.value },
+  { label: "引擎", value: cmProps.engine },
+]);
+
 const currentCodeDisplay = computed(() => {
   if (cmProps.mode === "shiki") {
     return `import { EditorView } from '@codemirror/view';
-import { shikiToCodeMirror, updateEffect } from '@cmshiki/shiki';
+import { createHighlighterCore } from 'shiki/core';
+import { createOnigurumaEngine } from 'shiki/engine/oniguruma';
+import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
+import { shikiToCodeMirror } from '@cmshiki/shiki';
 
-// 初始化 Shiki 并转换为 CodeMirror Extension
-const { shiki, getTheme } = await shikiToCodeMirror({
+const highlighter = await createHighlighterCore({
+  langs: [await import('./grammars/${cmProps.lang.name}.json').then((m) => m.default)],
+  themes: [await import('./themes/${cmProps.theme.name}.json').then((m) => m.default)],
+  engine: ${currentEngineFactory.value},
+});
+
+const { shiki } = await shikiToCodeMirror({
+  highlighter,
   lang: '${cmProps.lang.name}',
   theme: '${cmProps.theme.name}',
-  engine: '${cmProps.engine}'
+  themeStyle: 'cm',
+  defaultColor: 'light',
 });
 
 const view = new EditorView({
   doc: '...',
-  parent: document.getElementById('editor'),
-  extensions: [
-    shiki // 将 shiki 扩展注入
-  ]
+  parent: document.getElementById('editor')!,
+  extensions: [shiki],
 });
 
-// 后续动态更新配置
 view.dispatch({
-  effects: updateEffect.of({
-    lang: '...',
-    theme: '...',
-    engine: '...'
-  })
-});`;
+  changes: { from: 0, to: view.state.doc.length, insert: 'new code' },
+});
+
+// 切换语言、主题或引擎时，建议重新创建 highlighter 与 view。`;
   } else {
     return `import { ShikiEditor } from '@cmshiki/editor';
+import { createHighlighterCore } from 'shiki/core';
+import { createOnigurumaEngine } from 'shiki/engine/oniguruma';
+import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
 
-// 使用封装更友好的 ShikiEditor
-const editor = await ShikiEditor.create({
-  parent: document.getElementById('editor'),
-  doc: '...',
-  lang: '${cmProps.lang.name}',
-  themes: {
-    light: '${cmProps.theme.name}', // 可配置多主题
-    dark: 'github-dark',
-  },
-  defaultColor: 'light', // 当前默认颜色
-  themeStyle: 'cm', // 使用 cm 的样式方式
-  engine: '${cmProps.engine}'
+const highlighter = await createHighlighterCore({
+  langs: [await import('./grammars/${cmProps.lang.name}.json').then((m) => m.default)],
+  themes: [await import('./themes/${cmProps.theme.name}.json').then((m) => m.default)],
+  engine: ${currentEngineFactory.value},
 });
 
-// 后续动态更新配置
+const editor = await ShikiEditor.create({
+  parent: document.getElementById('editor')!,
+  doc: '...',
+  highlighter,
+  lang: '${cmProps.lang.name}',
+  themes: {
+    light: '${cmProps.theme.name}',
+  },
+  defaultColor: 'light',
+  themeStyle: 'cm',
+  cssVariablePrefix: '--cm-',
+});
+
+editor.setDoc('new code');
 editor.render({
-  lang: '...',
-  theme: '...',
-  engine: '...'
+  lang: '${cmProps.lang.name}',
+  theme: '${cmProps.theme.name}',
 });`;
   }
 });
@@ -328,6 +386,7 @@ const configCmProps = computed<CMProps>(() => ({
   theme: cmProps.theme,
   engine: cmProps.engine,
   mode: cmProps.mode,
+  readonly: true,
 }));
 
 async function loadSample(name: string) {
@@ -368,6 +427,18 @@ function setMode(mode: AppMode) {
 
 function onPerf(ms: number) {
   perfMs.value = ms;
+}
+
+async function copyCurrentCode() {
+  try {
+    await navigator.clipboard.writeText(currentCodeDisplay.value);
+    isCodeCopied.value = true;
+    window.setTimeout(() => {
+      isCodeCopied.value = false;
+    }, 1200);
+  } catch (error) {
+    console.error("Failed to copy current code:", error);
+  }
 }
 
 function getPerfColor(time: number) {

@@ -10,4 +10,5 @@ export interface CMProps {
   };
   engine: 'oniguruma' | 'javascript';
   mode: 'shiki' | 'editor';
+  readonly?: boolean;
 }
