@@ -1,0 +1,1 @@
+const s="TypeScript with Tags",t="ts-tags",a=[{include:"source.ts"}],e="source.ts.tags",c={displayName:s,name:t,patterns:a,scopeName:e};export{c as default,s as displayName,t as name,a as patterns,e as scopeName};
