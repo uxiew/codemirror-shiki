@@ -1,4 +1,4 @@
-import { Text } from '@codemirror/state';
+import { Text, type ChangeSet, type Line } from '@codemirror/state';
 import { Decoration } from '@codemirror/view';
 import { newStyleModuleName, mountStyles } from '@cmshiki/utils';
 
@@ -36,6 +36,10 @@ export interface CachePruneOptions {
 }
 
 export interface HighlightBudgetOptions {
+  /**
+   * Stop before starting another line once this many decorations were emitted
+   * by this call. A line is never cut in half.
+   */
   maxDecorations?: number;
 }
 
@@ -44,10 +48,86 @@ export interface HighlightResult {
   nextFrom: number | null;
 }
 
+/**
+ * Cached tokenization of one line.
+ *
+ * `tokens === null` means the line is rendered as plain text because it is
+ * longer than `tokenizeMaxLineLength` or ran past `tokenizeTimeLimit`. Such a
+ * line is not retried while its text and start state stay the same.
+ */
+export interface LineCacheEntry {
+  text: string;
+  startState: GrammarState | null;
+  endState: GrammarState | null;
+  tokens: ArrayLike<number> | null;
+}
+
 interface BoundedTokenizeResult {
-  /** Binary tokens from `tokenizeLine2`, or `null` when the line is left plain. */
   tokens: ArrayLike<number> | null;
   ruleStack: GrammarState | null;
+}
+
+/**
+ * Compare two grammar states. vscode-textmate stacks implement `equals()`;
+ * the document start is `null` on both sides.
+ */
+export function grammarStatesEqual(
+  a: GrammarState | null | undefined,
+  b: GrammarState | null | undefined,
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const equals = (a as any).equals;
+  return typeof equals === 'function' ? Boolean(equals.call(a, b)) : false;
+}
+
+/**
+ * Move cached lines through a document change.
+ *
+ * Lines the change touched are dropped and lines after it are renumbered, so
+ * their entries can be reused once the walk from the edit reaches them.
+ * Returns the first line number (in the new document) whose cached state can
+ * no longer be trusted as a starting point. Lines before it are untouched.
+ */
+export function remapLineCache<T>(
+  cache: Map<number, T>,
+  oldDoc: Text,
+  newDoc: Text,
+  changes: ChangeSet,
+): number {
+  const spans: { oldStart: number; oldEnd: number; delta: number }[] = [];
+  let firstDirty = newDoc.lines + 1;
+  changes.iterChangedRanges((fromA, toA, fromB, toB) => {
+    const oldStart = oldDoc.lineAt(fromA).number;
+    const oldEnd = oldDoc.lineAt(toA).number;
+    const newStart = newDoc.lineAt(fromB).number;
+    const newEnd = newDoc.lineAt(toB).number;
+    firstDirty = Math.min(firstDirty, newStart);
+    spans.push({
+      oldStart,
+      oldEnd,
+      delta: newEnd - newStart - (oldEnd - oldStart),
+    });
+  });
+  if (spans.length === 0 || cache.size === 0) return firstDirty;
+
+  const lines = Array.from(cache.keys()).sort((a, b) => a - b);
+  const moved: [number, T][] = [];
+  let spanIndex = 0;
+  let delta = 0;
+  for (const line of lines) {
+    while (spanIndex < spans.length && spans[spanIndex].oldEnd < line) {
+      delta += spans[spanIndex].delta;
+      spanIndex++;
+    }
+    if (spanIndex < spans.length && spans[spanIndex].oldStart <= line) {
+      continue; // the change touched this line, its text is stale
+    }
+    moved.push([line + delta, cache.get(line)!]);
+  }
+  cache.clear();
+  for (const [line, entry] of moved) cache.set(line, entry);
+  return firstDirty;
 }
 
 /**
@@ -99,9 +179,16 @@ export function computePrunableCacheLines(
 
 export class ShikiHighlighter extends Base {
   view!: any;
-  // Cache grammar state for every line to enable incremental parsing
-  private grammarStateCache = new Map<number, GrammarState>();
-  private lastCachedLine = 0;
+  /** Tokenization results per 1-based line number of `cacheDoc`. */
+  private lineCache = new Map<number, LineCacheEntry>();
+  /**
+   * Every cached line up to this number is known to agree with `cacheDoc`.
+   * Lines after it may be stale after an edit and are only reused once the
+   * forward walk has re-validated them (same text, same start state).
+   */
+  private validUpTo = 0;
+  /** The document the cache describes. Highlighting another document resets it. */
+  private cacheDoc: Text | null = null;
   private internal: Highlighter;
   private isCoreUpdating = false;
 
@@ -120,9 +207,8 @@ export class ShikiHighlighter extends Base {
   }
 
   async update(options: any, view: any) {
-    // Clear cache when options/theme/language changes
-    this.grammarStateCache.clear();
-    this.lastCachedLine = 0;
+    // Theme, language or style options changed: nothing cached is valid anymore.
+    this.resetLineCache();
     this.isCoreUpdating = true;
     try {
       // Update internal shiki instance access
@@ -131,6 +217,46 @@ export class ShikiHighlighter extends Base {
     } finally {
       this.isCoreUpdating = false;
     }
+  }
+
+  /** Forget everything cached about the document. */
+  resetLineCache() {
+    this.lineCache.clear();
+    this.validUpTo = 0;
+    this.cacheDoc = null;
+  }
+
+  /**
+   * Keep the line cache aligned with a document change.
+   *
+   * The view plugin calls this for every `docChanged` update before it
+   * highlights again. Without it every cached line number would be off by the
+   * number of inserted or deleted lines and nothing after the edit could be
+   * reused.
+   */
+  applyDocChanges(oldDoc: Text, newDoc: Text, changes: ChangeSet) {
+    if (this.cacheDoc === null) {
+      this.cacheDoc = newDoc;
+      return;
+    }
+    if (this.cacheDoc !== oldDoc && !this.cacheDoc.eq(oldDoc)) {
+      // The cache describes some other document; start over.
+      this.resetLineCache();
+      this.cacheDoc = newDoc;
+      return;
+    }
+    const firstDirty = remapLineCache(this.lineCache, oldDoc, newDoc, changes);
+    this.validUpTo = Math.min(this.validUpTo, firstDirty - 1);
+    this.cacheDoc = newDoc;
+  }
+
+  private adoptDoc(doc: Text) {
+    if (this.cacheDoc === doc) return;
+    if (this.cacheDoc !== null && !this.cacheDoc.eq(doc)) {
+      this.lineCache.clear();
+      this.validUpTo = 0;
+    }
+    this.cacheDoc = doc;
   }
 
   /**
@@ -161,12 +287,44 @@ export class ShikiHighlighter extends Base {
     return { tokens: result.tokens, ruleStack: result.ruleStack ?? null };
   }
 
-  private pruneGrammarStateCache(centerLine: number) {
-    const lines = Array.from(this.grammarStateCache.keys());
+  /**
+   * Tokens and end state for one line: from the cache when text and start
+   * state still match, otherwise freshly tokenized. Callers walk lines in
+   * order from a trusted anchor, which is what lets `validUpTo` advance.
+   */
+  private resolveLine(
+    line: Line,
+    state: GrammarState | null,
+    grammar: any,
+  ): LineCacheEntry {
+    const cached = this.lineCache.get(line.number);
+    let entry: LineCacheEntry;
+    if (
+      cached &&
+      cached.text === line.text &&
+      grammarStatesEqual(cached.startState, state)
+    ) {
+      entry = cached;
+    } else {
+      const result = this.tokenizeLineBounded(grammar, line.text, state);
+      entry = {
+        text: line.text,
+        startState: state,
+        endState: result.ruleStack,
+        tokens: result.tokens,
+      };
+      this.lineCache.set(line.number, entry);
+    }
+    if (line.number === this.validUpTo + 1) this.validUpTo = line.number;
+    return entry;
+  }
+
+  private pruneLineCache(centerLine: number) {
+    const lines = Array.from(this.lineCache.keys());
     const toDelete = computePrunableCacheLines(lines, centerLine);
 
     for (const line of toDelete) {
-      this.grammarStateCache.delete(line);
+      this.lineCache.delete(line);
     }
   }
 
@@ -208,9 +366,6 @@ export class ShikiHighlighter extends Base {
       }
       return { produced, nextFrom };
     }
-
-    // Debug
-    // console.log(`highlight: langId=${langId} themeAlias=${themeAlias}`)
 
     const validTheme = this.configs.themes[themeAlias];
 
@@ -261,150 +416,63 @@ export class ShikiHighlighter extends Base {
       '#000';
     const defaultForeground = colorMap[1] || themeForeground;
 
-    if (!grammar) return { produced, nextFrom };
+    this.adoptDoc(doc);
 
-    // 1. Identify line ranges
     const startLine = doc.lineAt(from).number;
     const endLine = doc.lineAt(to).number;
 
-    // 2. Bridge gap if necessary (tokenize previous lines to restore state)
-    // Find the nearest cached state before startLine
-    let stateLine = startLine - 1;
-    let state: GrammarState | undefined = undefined;
+    // 1. Starting state: the nearest cached line before the range that is
+    //    still trusted after any edits.
+    let anchorLine = Math.min(startLine - 1, this.validUpTo);
+    while (anchorLine >= 1 && !this.lineCache.has(anchorLine)) anchorLine--;
+    let state: GrammarState | null =
+      anchorLine >= 1 ? this.lineCache.get(anchorLine)!.endState : null;
 
-    if (stateLine >= 1) {
-      if (this.grammarStateCache.has(stateLine)) {
-        state = this.grammarStateCache.get(stateLine);
-      } else {
-        // Fallback: look backwards
-        let nearest = 0;
-        for (let i = stateLine; i >= 1; i--) {
-          if (this.grammarStateCache.has(i)) {
-            nearest = i;
-            state = this.grammarStateCache.get(i);
-            break;
-          }
-        }
-
-        // If gap exists, bridge it
-        if (nearest < stateLine) {
-          // Tokenize from nearest+1 to stateLine
-          let bridgeState = state; // Start from nearest state (or undefined if nearest=0)
-          for (let i = nearest + 1; i <= stateLine; i++) {
-            const lineContent = doc.line(i).text;
-            const result = this.tokenizeLineBounded(
-              grammar,
-              lineContent,
-              bridgeState ?? null,
-            );
-            bridgeState = result.ruleStack ?? undefined;
-            this.grammarStateCache.set(i, bridgeState!);
-          }
-          state = bridgeState;
-        }
-      }
+    // 2. Walk from the anchor up to the range. Cached lines that still match
+    //    cost one comparison each; this walk is where an edit above the
+    //    viewport converges with the previous tokenization again.
+    for (let i = anchorLine + 1; i < startLine; i++) {
+      state = this.resolveLine(doc.line(i), state, grammar).endState;
     }
 
-    // 3. Tokenize visible lines and emit decorations
-    let cmClasses: Record<string, string> = {};
+    // 3. Lines in range: resolve and emit decorations.
+    const cmClasses: Record<string, string> = {};
     const langLabel = getRuntimeLangLabel(this.configs.lang);
     this.view!.dom.classList.toggle(
       'lang-' + langLabel.replace(/[^\w-]/g, '_'),
       true,
     );
 
-    let currentState = state;
     let lastProcessedLine = startLine - 1;
-
     for (let i = startLine; i <= endLine; i++) {
-      if (maxDecorations !== undefined && produced >= maxDecorations) {
+      if (
+        maxDecorations !== undefined &&
+        i > startLine &&
+        produced >= maxDecorations
+      ) {
         nextFrom = doc.line(i).from;
         break;
       }
 
       const line = doc.line(i);
-      const lineContent = line.text;
-      const result = this.tokenizeLineBounded(
-        grammar,
-        lineContent,
-        currentState ?? null,
-      );
-
-      // Update cache for next lines
-      currentState = result.ruleStack ?? undefined;
-      this.grammarStateCache.set(i, currentState!);
-      this.lastCachedLine = Math.max(this.lastCachedLine, i);
-
-      if (result.tokens === null) {
-        lastProcessedLine = i;
-        continue;
+      const entry = this.resolveLine(line, state, grammar);
+      state = entry.endState;
+      if (entry.tokens !== null) {
+        produced += this.emitLineTokens(
+          line,
+          entry.tokens,
+          colorMap,
+          defaultForeground,
+          cmClasses,
+          buildDeco,
+        );
       }
-
-      const tokens = result.tokens;
-      const len = tokens.length / 2;
-
-      let pos = line.from;
-      // tokens format: [startOffset1, metadata1, startOffset2, metadata2, ...]
-      // Each token starts at tokens[2*j] and ends at the next token's start (or line end)
-
-      for (let j = 0; j < len; j++) {
-        const startOffset = tokens[2 * j];
-        const metadata = tokens[2 * j + 1];
-        // Next token start or line end
-        const endOffset = j + 1 < len ? tokens[2 * (j + 1)] : line.text.length;
-
-        const foregroundId = getForeground(metadata);
-        const fontStyle = getFontStyle(metadata);
-
-        // colorMap[0] is reserved/empty, colorMap[1] is default foreground.
-        // If a token does not resolve to a specific color, fall back to the
-        // theme foreground to avoid alias strings (e.g. "dark") as CSS colors.
-        const color = colorMap[foregroundId] || defaultForeground;
-
-        let style = `color:${color}`;
-        // FontStyle enum: None=0, Italic=1, Bold=2, Underline=4
-        if (fontStyle & 1) style += ';font-style:italic';
-        if (fontStyle & 2) style += ';font-weight:bold';
-        if (fontStyle & 4) style += ';text-decoration:underline';
-
-        // dedupe and cache the style
-        const cls = cmClasses[style] || newStyleModuleName();
-        cmClasses[style] = cls;
-
-        // convert to CodeMirror decoration
-        const tokenFrom = pos + startOffset;
-        const tokenTo = pos + endOffset;
-
-        if (tokenFrom < tokenTo) {
-          // Only nonempty tokens
-          buildDeco(
-            tokenFrom,
-            tokenTo,
-            Decoration.mark({
-              tagName: 'span',
-              attributes: {
-                class: (this.isCmStyle ? cls : undefined) as any,
-                style: (this.isCmStyle ? undefined : style) as any,
-              },
-            }),
-          );
-          produced++;
-        }
-      }
-
       lastProcessedLine = i;
-
-      if (maxDecorations !== undefined && produced >= maxDecorations) {
-        if (i < endLine) {
-          nextFrom = doc.line(i + 1).from;
-        }
-        break;
-      }
     }
 
-    const pruneCenterLine =
-      lastProcessedLine >= startLine ? lastProcessedLine : startLine;
-    this.pruneGrammarStateCache(pruneCenterLine);
+    this.pruneLineCache(
+      lastProcessedLine >= startLine ? lastProcessedLine : startLine,
+    );
 
     if (this.isCmStyle) {
       Object.entries(cmClasses).forEach(([k, v]) => {
@@ -416,5 +484,65 @@ export class ShikiHighlighter extends Base {
     }
 
     return { produced, nextFrom };
+  }
+
+  /** Turn one line's binary tokens into decorations. Returns how many were emitted. */
+  private emitLineTokens(
+    line: Line,
+    tokens: ArrayLike<number>,
+    colorMap: string[],
+    defaultForeground: string,
+    cmClasses: Record<string, string>,
+    buildDeco: (from: number, to: number, mark: Decoration) => void,
+  ): number {
+    let produced = 0;
+    const len = tokens.length / 2;
+
+    // tokens format: [startOffset1, metadata1, startOffset2, metadata2, ...]
+    // Each token starts at tokens[2*j] and ends at the next token's start (or line end)
+    for (let j = 0; j < len; j++) {
+      const startOffset = tokens[2 * j];
+      const metadata = tokens[2 * j + 1];
+      const endOffset = j + 1 < len ? tokens[2 * (j + 1)] : line.length;
+
+      const foregroundId = getForeground(metadata);
+      const fontStyle = getFontStyle(metadata);
+
+      // colorMap[0] is reserved/empty, colorMap[1] is default foreground.
+      // If a token does not resolve to a specific color, fall back to the
+      // theme foreground to avoid alias strings (e.g. "dark") as CSS colors.
+      const color = colorMap[foregroundId] || defaultForeground;
+
+      let style = `color:${color}`;
+      // FontStyle enum: None=0, Italic=1, Bold=2, Underline=4
+      if (fontStyle & 1) style += ';font-style:italic';
+      if (fontStyle & 2) style += ';font-weight:bold';
+      if (fontStyle & 4) style += ';text-decoration:underline';
+
+      // dedupe and cache the style
+      const cls = cmClasses[style] || newStyleModuleName();
+      cmClasses[style] = cls;
+
+      const tokenFrom = line.from + startOffset;
+      const tokenTo = line.from + endOffset;
+
+      if (tokenFrom < tokenTo) {
+        // Only nonempty tokens
+        buildDeco(
+          tokenFrom,
+          tokenTo,
+          Decoration.mark({
+            tagName: 'span',
+            attributes: {
+              class: (this.isCmStyle ? cls : undefined) as any,
+              style: (this.isCmStyle ? undefined : style) as any,
+            },
+          }),
+        );
+        produced++;
+      }
+    }
+
+    return produced;
   }
 }

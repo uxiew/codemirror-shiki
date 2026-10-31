@@ -1,71 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { Text } from '@codemirror/state';
 
-import { ShikiHighlighter } from '../src/highlighter';
-
-interface MockState {
-  id: string;
-  equals: (other: MockState | null) => boolean;
-}
-
-function mockState(id: string): MockState {
-  return {
-    id,
-    equals(other) {
-      return !!other && other.id === id;
-    },
-  };
-}
-
-function createHighlighter(
-  tokenizeLine2: (text: string, state: any, timeLimit?: number) => any,
-  options: Record<string, unknown> = {},
-) {
-  const grammar = { tokenizeLine2: vi.fn(tokenizeLine2) };
-  const shikiCore = {
-    setTheme: vi.fn(() => ({ colorMap: ['', '#c9d1d9', '#ff0000'] })),
-    getLanguage: vi.fn(() => grammar),
-    getTheme: vi.fn(() => ({
-      colors: {},
-      bg: '#0d1117',
-      fg: '#c9d1d9',
-      type: 'dark',
-    })),
-  };
-
-  const highlighter = new ShikiHighlighter(shikiCore as any, {
-    lang: 'javascript',
-    themes: { dark: 'github-dark' },
-    defaultColor: 'dark',
-    themeStyle: 'shiki',
-    cssVariablePrefix: '--cm-',
-    includeExplanation: false,
-    tokenizeMaxLineLength: 20000,
-    tokenizeTimeLimit: 500,
-    warnings: false,
-    ...options,
-  } as any);
-
-  highlighter.initTheme();
-  highlighter.setView({
-    dom: { classList: { toggle: vi.fn() } },
-  } as any);
-
-  return { highlighter, grammar };
-}
-
-// One token per line, state id = line text, so tests can follow the state chain.
-function simpleTokenizer(text: string, _state: any) {
-  return {
-    tokens: [0, 2 << 15],
-    ruleStack: mockState(text),
-    stoppedEarly: false,
-  };
-}
+import { createMockHighlighter, simpleTokenizer } from './helpers/mock-highlighter';
 
 describe('ShikiHighlighter: long line protection', () => {
   it('leaves lines over tokenizeMaxLineLength plain and carries the state through', () => {
-    const { highlighter, grammar } = createHighlighter(simpleTokenizer, {
+    const { highlighter, grammar } = createMockHighlighter(simpleTokenizer, {
       tokenizeMaxLineLength: 10,
     });
     const longLine = 'x'.repeat(50);
@@ -84,7 +24,7 @@ describe('ShikiHighlighter: long line protection', () => {
   });
 
   it('passes tokenizeTimeLimit and treats stoppedEarly lines as plain', () => {
-    const { highlighter, grammar } = createHighlighter(
+    const { highlighter, grammar } = createMockHighlighter(
       (text, state, timeLimit) => {
         if (text === 'slow') {
           return { tokens: [0, 2 << 15], ruleStack: null, stoppedEarly: true };
@@ -106,7 +46,7 @@ describe('ShikiHighlighter: long line protection', () => {
   });
 
   it('tokenizes without a limit when both options are 0', () => {
-    const { highlighter, grammar } = createHighlighter(simpleTokenizer, {
+    const { highlighter, grammar } = createMockHighlighter(simpleTokenizer, {
       tokenizeMaxLineLength: 0,
       tokenizeTimeLimit: 0,
     });

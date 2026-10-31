@@ -202,6 +202,13 @@ class ShikiView {
     if (update.docChanged) {
       // Keep existing decorations aligned immediately with document edits.
       this.decorations = this.decorations.map(update.changes);
+      // Keep cached line tokens aligned too, so only lines from the edit on
+      // are re-tokenized.
+      this.shikiHighlighter.applyDocChanges(
+        update.startState.doc,
+        update.state.doc,
+        update.changes,
+      );
       // If we have an updateEffect, the .then() above will handle the full re-highlight.
       // Otherwise, we trigger a standard doc-change highlight.
       if (!hasUpdateEffect) {
