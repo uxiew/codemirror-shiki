@@ -41,6 +41,19 @@ export interface HighlightBudgetOptions {
    * by this call. A line is never cut in half.
    */
   maxDecorations?: number;
+  /**
+   * Absolute `performance.now()` time to stop at. Checked between lines, so a
+   * call always makes progress on at least one line. Unfinished work is
+   * reported through `nextFrom`.
+   */
+  deadline?: number;
+  /**
+   * With a `deadline`, also cap each line's tokenization at the time left and
+   * hand back lines that do not finish as unfinished instead of giving up on
+   * them. Use this for the synchronous pass inside an editor update; the idle
+   * pass that follows gives such lines the full `tokenizeTimeLimit`.
+   */
+  deferSlowLines?: boolean;
 }
 
 export interface HighlightResult {
@@ -65,6 +78,8 @@ export interface LineCacheEntry {
 interface BoundedTokenizeResult {
   tokens: ArrayLike<number> | null;
   ruleStack: GrammarState | null;
+  /** Did not finish in the time left before the deadline; try again later. */
+  deferred: boolean;
 }
 
 /**
@@ -196,6 +211,8 @@ export class ShikiHighlighter extends Base {
    * token.
    */
   private markCache = new Map<string, Decoration>();
+  /** Lines tokenized (not served from cache) so far; lets a deadline measure real work. */
+  private freshLines = 0;
   private internal: Highlighter;
   private isCoreUpdating = false;
 
@@ -285,30 +302,50 @@ export class ShikiHighlighter extends Base {
     grammar: any,
     text: string,
     state: GrammarState | null,
+    budget: HighlightBudgetOptions,
   ): BoundedTokenizeResult {
     const maxLineLength = Number(this.configs.tokenizeMaxLineLength) || 0;
     if (maxLineLength > 0 && text.length > maxLineLength) {
-      return { tokens: null, ruleStack: state };
+      return { tokens: null, ruleStack: state, deferred: false };
     }
 
-    const timeLimit = Number(this.configs.tokenizeTimeLimit) || 0;
+    const configuredLimit = Number(this.configs.tokenizeTimeLimit) || 0;
+    let timeLimit = configuredLimit;
+    let boundByDeadline = false;
+    if (budget.deferSlowLines && budget.deadline !== undefined) {
+      const remaining = Math.max(
+        1,
+        Math.ceil(budget.deadline - performance.now()),
+      );
+      if (configuredLimit <= 0 || remaining < configuredLimit) {
+        timeLimit = remaining;
+        boundByDeadline = true;
+      }
+    }
+
     const result = grammar.tokenizeLine2(text, state as any, timeLimit);
     if (result.stoppedEarly) {
-      return { tokens: null, ruleStack: state };
+      return { tokens: null, ruleStack: state, deferred: boundByDeadline };
     }
-    return { tokens: result.tokens, ruleStack: result.ruleStack ?? null };
+    return {
+      tokens: result.tokens,
+      ruleStack: result.ruleStack ?? null,
+      deferred: false,
+    };
   }
 
   /**
    * Tokens and end state for one line: from the cache when text and start
-   * state still match, otherwise freshly tokenized. Callers walk lines in
-   * order from a trusted anchor, which is what lets `validUpTo` advance.
+   * state still match, otherwise freshly tokenized. Returns `null` when the
+   * line was deferred (see `deferSlowLines`). Callers walk lines in order
+   * from a trusted anchor, which is what lets `validUpTo` advance.
    */
   private resolveLine(
     line: Line,
     state: GrammarState | null,
     grammar: any,
-  ): LineCacheEntry {
+    budget: HighlightBudgetOptions,
+  ): LineCacheEntry | null {
     const cached = this.lineCache.get(line.number);
     let entry: LineCacheEntry;
     if (
@@ -318,7 +355,14 @@ export class ShikiHighlighter extends Base {
     ) {
       entry = cached;
     } else {
-      const result = this.tokenizeLineBounded(grammar, line.text, state);
+      const result = this.tokenizeLineBounded(
+        grammar,
+        line.text,
+        state,
+        budget,
+      );
+      if (result.deferred) return null;
+      this.freshLines++;
       entry = {
         text: line.text,
         startState: state,
@@ -357,7 +401,7 @@ export class ShikiHighlighter extends Base {
   ): HighlightResult {
     let produced = 0;
     let nextFrom: number | null = null;
-    const maxDecorations = budgetOptions.maxDecorations;
+    const { maxDecorations, deadline } = budgetOptions;
 
     if (this.isCoreUpdating) {
       return { produced, nextFrom };
@@ -430,6 +474,12 @@ export class ShikiHighlighter extends Base {
 
     this.adoptDoc(doc);
 
+    const langLabel = getRuntimeLangLabel(this.configs.lang);
+    this.view!.dom.classList.toggle(
+      'lang-' + langLabel.replace(/[^\w-]/g, '_'),
+      true,
+    );
+
     const startLine = doc.lineAt(from).number;
     const endLine = doc.lineAt(to).number;
 
@@ -440,44 +490,64 @@ export class ShikiHighlighter extends Base {
     let state: GrammarState | null =
       anchorLine >= 1 ? this.lineCache.get(anchorLine)!.endState : null;
 
-    // 2. Walk from the anchor up to the range. Cached lines that still match
-    //    cost one comparison each; this walk is where an edit above the
-    //    viewport converges with the previous tokenization again.
-    for (let i = anchorLine + 1; i < startLine; i++) {
-      state = this.resolveLine(doc.line(i), state, grammar).endState;
-    }
-
-    // 3. Lines in range: resolve and emit decorations.
-    const langLabel = getRuntimeLangLabel(this.configs.lang);
-    this.view!.dom.classList.toggle(
-      'lang-' + langLabel.replace(/[^\w-]/g, '_'),
-      true,
-    );
+    // The deadline is only honoured once at least one line was actually
+    // tokenized, so every call makes progress and the caller cannot spin.
+    // Cache hits cost microseconds and never count.
+    const freshAtStart = this.freshLines;
+    const outOfTime = () =>
+      deadline !== undefined &&
+      this.freshLines > freshAtStart &&
+      performance.now() >= deadline;
 
     let lastProcessedLine = startLine - 1;
-    for (let i = startLine; i <= endLine; i++) {
-      if (
-        maxDecorations !== undefined &&
-        i > startLine &&
-        produced >= maxDecorations
-      ) {
-        nextFrom = doc.line(i).from;
-        break;
+    work: {
+      // 2. Walk from the anchor up to the range. Cached lines that still
+      //    match cost one comparison each; this walk is where an edit above
+      //    the viewport converges with the previous tokenization again.
+      for (let i = anchorLine + 1; i < startLine; i++) {
+        if (outOfTime()) {
+          nextFrom = from;
+          break work;
+        }
+        const entry = this.resolveLine(doc.line(i), state, grammar, budgetOptions);
+        if (entry === null) {
+          nextFrom = from;
+          break work;
+        }
+        state = entry.endState;
       }
 
-      const line = doc.line(i);
-      const entry = this.resolveLine(line, state, grammar);
-      state = entry.endState;
-      if (entry.tokens !== null) {
-        produced += this.emitLineTokens(
-          line,
-          entry.tokens,
-          colorMap,
-          defaultForeground,
-          buildDeco,
-        );
+      // 3. Lines in range: resolve and emit decorations.
+      for (let i = startLine; i <= endLine; i++) {
+        const line = doc.line(i);
+        const overBudget =
+          maxDecorations !== undefined &&
+          i > startLine &&
+          produced >= maxDecorations;
+        if (overBudget || outOfTime()) {
+          nextFrom = line.from;
+          break work;
+        }
+
+        const entry = this.resolveLine(line, state, grammar, budgetOptions);
+        if (entry === null) {
+          nextFrom = line.from;
+          break work;
+        }
+        state = entry.endState;
+        if (entry.tokens !== null) {
+          produced += this.emitLineTokens(
+            line,
+            entry.tokens,
+            colorMap,
+            defaultForeground,
+            buildDeco,
+            from,
+            to,
+          );
+        }
+        lastProcessedLine = i;
       }
-      lastProcessedLine = i;
     }
 
     this.pruneLineCache(
@@ -509,13 +579,23 @@ export class ShikiHighlighter extends Base {
     return mark;
   }
 
-  /** Turn one line's binary tokens into decorations. Returns how many were emitted. */
+  /**
+   * Turn one line's binary tokens into decorations, clipped to `[from, to]`.
+   * Returns how many were emitted.
+   *
+   * Clipping matters for long lines: CodeMirror hides the off-screen parts of
+   * a line longer than ~4000 characters behind line gaps and reports each
+   * visible piece as its own range. Emitting the whole line for every piece
+   * would duplicate decorations and break their ordering.
+   */
   private emitLineTokens(
     line: Line,
     tokens: ArrayLike<number>,
     colorMap: string[],
     defaultForeground: string,
     buildDeco: (from: number, to: number, mark: Decoration) => void,
+    from: number,
+    to: number,
   ): number {
     let produced = 0;
     const len = tokens.length / 2;
@@ -524,8 +604,12 @@ export class ShikiHighlighter extends Base {
     // Each token starts at tokens[2*j] and ends at the next token's start (or line end)
     for (let j = 0; j < len; j++) {
       const startOffset = tokens[2 * j];
-      const metadata = tokens[2 * j + 1];
       const endOffset = j + 1 < len ? tokens[2 * (j + 1)] : line.length;
+      const tokenFrom = Math.max(line.from + startOffset, from);
+      const tokenTo = Math.min(line.from + endOffset, to);
+      if (tokenFrom >= tokenTo) continue; // empty, or outside the requested range
+
+      const metadata = tokens[2 * j + 1];
 
       const foregroundId = getForeground(metadata);
       const fontStyle = getFontStyle(metadata);
@@ -541,14 +625,8 @@ export class ShikiHighlighter extends Base {
       if (fontStyle & 2) style += ';font-weight:bold';
       if (fontStyle & 4) style += ';text-decoration:underline';
 
-      const tokenFrom = line.from + startOffset;
-      const tokenTo = line.from + endOffset;
-
-      if (tokenFrom < tokenTo) {
-        // Only nonempty tokens
-        buildDeco(tokenFrom, tokenTo, this.getMark(style));
-        produced++;
-      }
+      buildDeco(tokenFrom, tokenTo, this.getMark(style));
+      produced++;
     }
 
     return produced;

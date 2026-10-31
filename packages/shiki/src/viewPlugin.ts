@@ -12,7 +12,7 @@ import {
   type Text,
 } from '@codemirror/state';
 
-import type { Highlighter, Options, ShikiToCMOptions } from './types/types';
+import type { Options, ShikiToCMOptions } from './types/types';
 import { ShikiHighlighter } from './highlighter';
 
 /** update theme options */
@@ -32,7 +32,19 @@ interface DecorationEntry {
 const RAPID_VIEWPORT_INTERVAL_MS = 48;
 const RAPID_SCROLL_SETTLE_MS = 96;
 const COARSE_HIGHLIGHT_LINE_BUDGET = 240;
-const MAX_DECORATIONS_PER_CHUNK = 2500;
+/** How long one idle chunk may hold the main thread before yielding. */
+const CHUNK_TIME_BUDGET_MS = 12;
+/**
+ * Budget for the pass that runs synchronously inside an editor update, so
+ * typing and scrolling stay styled without a flash when the work is cheap.
+ * Cached lines cost microseconds; anything slower is finished in idle chunks.
+ */
+const SYNC_PASS_BUDGET_MS = 6;
+/**
+ * Soft cap on decorations per chunk. Checked between lines, so a line is
+ * never cut in half; a single line can exceed it by its own token count.
+ */
+const MAX_DECORATIONS_PER_CHUNK = 20000;
 
 export function normalizeVisibleRanges(
   ranges: readonly { from: number; to: number }[],
@@ -158,6 +170,16 @@ const cancelIdleCallback =
     ? window.cancelIdleCallback
     : clearTimeout;
 
+interface HighlightOptions {
+  /** Only style a bounded number of lines; used while the user scrolls fast. */
+  coarse?: boolean;
+  /**
+   * Run the first chunk right now, inside the current update, with a small
+   * budget. Whatever is left continues in idle callbacks.
+   */
+  sync?: boolean;
+}
+
 class ShikiView {
   decorations: DecorationSet = RangeSet.empty;
   lastPos = {
@@ -175,10 +197,9 @@ class ShikiView {
     public shikiHighlighter: ShikiHighlighter,
     view: EditorView,
   ) {
-    this.updateHighlight(view);
+    // Style what is cheap right away so the first frame is not plain text.
+    this.updateHighlight(view, { sync: true });
   }
-
-  // when crashed
 
   destroy() {
     this.cancelPendingHighlight();
@@ -210,17 +231,15 @@ class ShikiView {
         update.changes,
       );
       // If we have an updateEffect, the .then() above will handle the full re-highlight.
-      // Otherwise, we trigger a standard doc-change highlight.
       if (!hasUpdateEffect) {
-        this.docChangeHighlight(update);
+        this.updateHighlight(update.view, { sync: true });
       }
     } else if (update.viewportChanged) {
       this.handleViewportChanged(update.view);
     } else if (update.transactions.some((tr) => tr.reconfigured)) {
-      this.updateHighlight(update.view);
+      this.updateHighlight(update.view, { sync: true });
     }
   }
-
 
   private clearDecorations() {
     this.decorations = RangeSet.empty;
@@ -247,142 +266,142 @@ class ShikiView {
       this.lastViewportChangeAt,
     );
     this.lastViewportChangeAt = now;
+    this.cancelPendingViewportSettle();
 
     if (!shouldDefer) {
-      this.cancelPendingViewportSettle();
-      this.updateHighlight(view, { coarse: false });
+      this.updateHighlight(view, { sync: true });
       return;
     }
 
-    this.cancelPendingViewportSettle();
+    // Scrolling fast: style a bounded slice now, the rest once it settles.
     this.updateHighlight(view, { coarse: true });
     this.pendingViewportSettle = setTimeout(() => {
       this.pendingViewportSettle = null;
-      this.updateHighlight(view, { coarse: false });
+      this.updateHighlight(view);
     }, RAPID_SCROLL_SETTLE_MS);
   }
 
-  docChangeHighlight(update: ViewUpdate) {
-    // During typing, prefer stable rendering over deferred/chunked updates.
+  /**
+   * Highlight the visible ranges in time-budgeted chunks.
+   *
+   * Each chunk hands the highlighter a deadline; it stops between lines and
+   * reports where to continue. Ranges no chunk has reached yet keep their
+   * previous decorations, so a slow line never flashes to plain text while
+   * its tokens are being computed.
+   */
+  updateHighlight(view: EditorView, options: HighlightOptions = {}) {
+    // Cancel any pending work from previous scroll
     this.cancelPendingHighlight();
-    this.cancelPendingViewportSettle();
+
+    const doc = view.state.doc;
+    const visibleRanges = normalizeVisibleRanges(view.visibleRanges);
+    const ranges = options.coarse
+      ? trimRangesByLineBudget(doc, visibleRanges)
+      : visibleRanges;
     const requestId = ++this.highlightRequestId;
 
-    const doc = update.view.state.doc;
-    const ranges = normalizeVisibleRanges(update.view.visibleRanges);
     if (doc.length === 0 || ranges.length === 0) {
       this.decorations = RangeSet.empty;
       return;
     }
 
-    const entries: DecorationEntry[] = [];
-    for (const { from, to } of ranges) {
-      this.shikiHighlighter.highlight(doc, from, to, (from, to, mark) => {
-        entries.push({ from, to, mark });
-      });
-      this.lastPos = { from, to };
-    }
-
-    if (requestId !== this.highlightRequestId) return;
-    this.decorations = buildDecorationsFromEntries(entries);
-  }
-
-  /**
-   * Scheme 2: Deferred Highlighting
-   * 1. Cancel any pending highlight work
-   * 2. Clear decorations immediately (show unstyled text)
-   * 3. Schedule async highlight with requestIdleCallback
-   * 4. Update decorations when done
-   */
-  updateHighlight(
-    view: EditorView,
-    options: { coarse?: boolean; chunked?: boolean } = {},
-  ) {
-    // Cancel any pending work from previous scroll
-    this.cancelPendingHighlight();
-
-    const doc = view.state.doc;
-    const normalizedVisibleRanges = normalizeVisibleRanges(view.visibleRanges);
-    const newVisibleRanges = options.coarse
-      ? trimRangesByLineBudget(doc, normalizedVisibleRanges)
-      : normalizedVisibleRanges;
-    const useChunked = options.chunked !== false;
-    const requestId = ++this.highlightRequestId;
-
-    if (doc.length === 0 || newVisibleRanges.length === 0) {
-      this.decorations = RangeSet.empty;
-      return;
-    }
-
     // Store current viewport for comparison after async work
-    const requestedRanges = newVisibleRanges.map((r) => ({ ...r }));
-
-    const pendingRanges = newVisibleRanges.slice();
+    const requestedRanges = ranges.map((r) => ({ ...r }));
+    const pendingRanges = ranges.slice();
     const entries: DecorationEntry[] = [];
 
-    const runChunk = () => {
+    const runChunk = (budgetMs: number, sync: boolean) => {
       if (requestId !== this.highlightRequestId) {
         this.pendingHighlight = null;
         return;
       }
-      // Check if viewport hasn't changed during wait
-      const currentRanges = normalizeVisibleRanges(view.visibleRanges);
-      const isSameViewport = isSameRanges(requestedRanges, currentRanges);
-
-      if (!isSameViewport) {
+      if (
+        !sync &&
+        !isSameRanges(requestedRanges, normalizeVisibleRanges(view.visibleRanges))
+      ) {
+        // Viewport moved on; its own update has scheduled a new highlight.
         this.pendingHighlight = null;
-        // Viewport changed, skip this work (new highlight already scheduled)
         return;
       }
-      let remainingDecorations = useChunked
-        ? MAX_DECORATIONS_PER_CHUNK
-        : Number.MAX_SAFE_INTEGER;
 
+      const deadline = performance.now() + budgetMs;
+      let producedThisChunk = 0;
       try {
-        // Chunked tokenization to keep each idle pass within a bounded budget.
-        while (pendingRanges.length > 0 && remainingDecorations > 0) {
-          const current = pendingRanges.shift()!;
+        while (pendingRanges.length > 0) {
+          if (producedThisChunk >= MAX_DECORATIONS_PER_CHUNK) break;
+          if (producedThisChunk > 0 && performance.now() >= deadline) break;
+
+          const current = pendingRanges[0];
           const result = this.shikiHighlighter.highlight(
             doc,
             current.from,
             current.to,
             (from, to, mark) => {
-              if (remainingDecorations <= 0) return;
-              remainingDecorations--;
               entries.push({ from, to, mark });
             },
-            { maxDecorations: remainingDecorations },
+            {
+              maxDecorations: MAX_DECORATIONS_PER_CHUNK - producedThisChunk,
+              deadline,
+              deferSlowLines: sync,
+            },
           );
+          producedThisChunk += result.produced;
+          this.lastPos = { from: current.from, to: current.to };
 
           if (result.nextFrom !== null && result.nextFrom < current.to) {
-            pendingRanges.unshift({ from: result.nextFrom, to: current.to });
+            // Out of budget inside this range; continue from here next time.
+            pendingRanges[0] = { from: result.nextFrom, to: current.to };
+            break;
           }
-
-          this.lastPos = { from: current.from, to: current.to };
+          pendingRanges.shift();
         }
       } catch (error) {
         console.error('[@cmshiki/editor] highlight failed:', error);
+        // Do not retry forever on a broken grammar.
+        pendingRanges.length = 0;
       }
 
-      const snapshot = entries.slice();
       if (requestId !== this.highlightRequestId) return;
-      this.decorations = buildDecorationsFromEntries(snapshot);
+      this.decorations = this.mergeWithUnfinished(entries, pendingRanges, doc);
       this.pendingHighlight = null;
 
-      // Trigger re-render with current chunk result
-      view.dispatch({});
+      // Inside an update CodeMirror reads the new decorations itself.
+      if (!sync) view.dispatch({});
 
-      if (
-        useChunked &&
-        pendingRanges.length > 0 &&
-        requestId === this.highlightRequestId
-      ) {
-        this.pendingHighlight = requestIdleCallback(runChunk);
+      if (pendingRanges.length > 0) {
+        this.pendingHighlight = requestIdleCallback(() =>
+          runChunk(CHUNK_TIME_BUDGET_MS, false),
+        );
       }
     };
 
-    // Schedule highlighting in idle time (doesn't block UI)
-    this.pendingHighlight = requestIdleCallback(runChunk);
+    if (options.sync) {
+      runChunk(SYNC_PASS_BUDGET_MS, true);
+    } else {
+      this.pendingHighlight = requestIdleCallback(() =>
+        runChunk(CHUNK_TIME_BUDGET_MS, false),
+      );
+    }
+  }
+
+  /**
+   * Decorations built so far, plus the previous decorations of everything
+   * from the first unfinished range onwards.
+   */
+  private mergeWithUnfinished(
+    entries: DecorationEntry[],
+    pendingRanges: SimpleRange[],
+    doc: Text,
+  ): DecorationSet {
+    if (pendingRanges.length === 0) {
+      return buildDecorationsFromEntries(entries, true);
+    }
+    const tailStart = pendingRanges[0].from;
+    const merged = entries.slice();
+    this.decorations.between(tailStart, doc.length, (from, to, mark) => {
+      if (from >= tailStart) merged.push({ from, to, mark });
+    });
+    return buildDecorationsFromEntries(merged, true);
   }
 }
 
