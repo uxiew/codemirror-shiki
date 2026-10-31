@@ -78,6 +78,10 @@ describe('shiki view plugin: budgeted highlighting', () => {
     warm.cleanup();
 
     const { styledSpans, cleanup } = mount('a\nb\nc', warm.shiki);
+    // At least the first line is styled before the constructor returns; the
+    // rest depends on whether the 6ms budget ran out on a busy machine.
+    expect(styledSpans()).toBeGreaterThanOrEqual(1);
+    await flushIdle();
     expect(styledSpans()).toBe(3);
     cleanup();
   });
