@@ -87,6 +87,17 @@ describe('ShikiHighlighter: per-line token cache', () => {
     expect(tokenizedSince()).toEqual([]);
   });
 
+  it('reuses one Decoration per token style across lines and passes', () => {
+    const { highlighter } = createMockHighlighter(simpleTokenizer);
+    const doc = Text.of(['a', 'b', 'c']);
+
+    const marks = new Set<unknown>();
+    highlighter.highlight(doc, 0, doc.length, (_f, _t, mark) => marks.add(mark));
+    highlighter.highlight(doc, 0, doc.length, (_f, _t, mark) => marks.add(mark));
+
+    expect(marks.size).toBe(1);
+  });
+
   it('starts over when asked to highlight an unrelated document', () => {
     const { highlighter, tokenizedSince } = createMockHighlighter(simpleTokenizer);
     const docA = Text.of(['a', 'b']);

@@ -189,6 +189,13 @@ export class ShikiHighlighter extends Base {
   private validUpTo = 0;
   /** The document the cache describes. Highlighting another document resets it. */
   private cacheDoc: Text | null = null;
+  /**
+   * One Decoration per distinct token style. Before this every highlight pass
+   * minted new class names and mounted the same CSS rules again, so a scroll
+   * through a big file leaked style modules and allocated one Decoration per
+   * token.
+   */
+  private markCache = new Map<string, Decoration>();
   private internal: Highlighter;
   private isCoreUpdating = false;
 
@@ -202,6 +209,10 @@ export class ShikiHighlighter extends Base {
   }
 
   setView(view: any) {
+    if (view !== this.view) {
+      // Classes are mounted on a view's root; a new view needs them mounted again.
+      this.markCache.clear();
+    }
     this.view = view;
     return this;
   }
@@ -209,6 +220,7 @@ export class ShikiHighlighter extends Base {
   async update(options: any, view: any) {
     // Theme, language or style options changed: nothing cached is valid anymore.
     this.resetLineCache();
+    this.markCache.clear();
     this.isCoreUpdating = true;
     try {
       // Update internal shiki instance access
@@ -436,7 +448,6 @@ export class ShikiHighlighter extends Base {
     }
 
     // 3. Lines in range: resolve and emit decorations.
-    const cmClasses: Record<string, string> = {};
     const langLabel = getRuntimeLangLabel(this.configs.lang);
     this.view!.dom.classList.toggle(
       'lang-' + langLabel.replace(/[^\w-]/g, '_'),
@@ -463,7 +474,6 @@ export class ShikiHighlighter extends Base {
           entry.tokens,
           colorMap,
           defaultForeground,
-          cmClasses,
           buildDeco,
         );
       }
@@ -474,16 +484,29 @@ export class ShikiHighlighter extends Base {
       lastProcessedLine >= startLine ? lastProcessedLine : startLine,
     );
 
-    if (this.isCmStyle) {
-      Object.entries(cmClasses).forEach(([k, v]) => {
-        mountStyles(this.view!, {
-          // Pass important=true to match the !important rules from createTheme
-          [`& .cm-line .${v}`]: toStyleObject(k, false) || {},
-        });
-      });
-    }
-
     return { produced, nextFrom };
+  }
+
+  /**
+   * Decoration for a token style such as `color:#f00;font-weight:bold`.
+   * In `cm` mode the style is mounted once as a class rule on the view root;
+   * in `shiki` mode it is inlined.
+   */
+  private getMark(style: string): Decoration {
+    let mark = this.markCache.get(style);
+    if (mark) return mark;
+
+    if (this.isCmStyle) {
+      const cls = newStyleModuleName();
+      mountStyles(this.view!, {
+        [`& .cm-line .${cls}`]: toStyleObject(style, false) || {},
+      });
+      mark = Decoration.mark({ tagName: 'span', attributes: { class: cls } });
+    } else {
+      mark = Decoration.mark({ tagName: 'span', attributes: { style } });
+    }
+    this.markCache.set(style, mark);
+    return mark;
   }
 
   /** Turn one line's binary tokens into decorations. Returns how many were emitted. */
@@ -492,7 +515,6 @@ export class ShikiHighlighter extends Base {
     tokens: ArrayLike<number>,
     colorMap: string[],
     defaultForeground: string,
-    cmClasses: Record<string, string>,
     buildDeco: (from: number, to: number, mark: Decoration) => void,
   ): number {
     let produced = 0;
@@ -519,26 +541,12 @@ export class ShikiHighlighter extends Base {
       if (fontStyle & 2) style += ';font-weight:bold';
       if (fontStyle & 4) style += ';text-decoration:underline';
 
-      // dedupe and cache the style
-      const cls = cmClasses[style] || newStyleModuleName();
-      cmClasses[style] = cls;
-
       const tokenFrom = line.from + startOffset;
       const tokenTo = line.from + endOffset;
 
       if (tokenFrom < tokenTo) {
         // Only nonempty tokens
-        buildDeco(
-          tokenFrom,
-          tokenTo,
-          Decoration.mark({
-            tagName: 'span',
-            attributes: {
-              class: (this.isCmStyle ? cls : undefined) as any,
-              style: (this.isCmStyle ? undefined : style) as any,
-            },
-          }),
-        );
+        buildDeco(tokenFrom, tokenTo, this.getMark(style));
         produced++;
       }
     }
