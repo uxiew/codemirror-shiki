@@ -149,7 +149,7 @@ view.dispatch({
 | --- | --- | --- | --- |
 | `cssVariablePrefix` | `string` | `'--shiki-'` | CSS 变量前缀 |
 | `includeExplanation` | `boolean` | `false` | 是否保留 explanation |
-| `tokenizeMaxLineLength` | `number` | `20000` | 超过这个字符数的行不做语法解析，按纯文本渲染。`0` 表示不限制。详见下文「超长行与压缩产物」 |
+| `tokenizeMaxLineLength` | `number` | `20000` | 超过这个字符数的行只解析开头 4000 字符，其余按纯文本渲染。`0` 表示不限制。详见下文「超长行与压缩产物」 |
 | `tokenizeTimeLimit` | `number` | `500` | 单行解析的毫秒上限。超时的行重试一次，再超时就按纯文本渲染。`0` 表示不限制 |
 
 ### 超长行与压缩产物
@@ -158,7 +158,7 @@ TextMate 解析一行的开销随行长超线性增长。同一段压缩后的 J
 
 所以高亮按下面的规则干活：
 
-- 超过 `tokenizeMaxLineLength` 的行跳过解析，按主题默认前景色渲染，语法状态原样传给下一行。
+- 超过 `tokenizeMaxLineLength` 的行只解析开头 4000 字符，其余部分按主题默认前景色渲染；下一行从这 4000 字符结束时的语法状态接着走。CodeMirror 对这种行本来也只渲染开头可见的那一段。
 - 单行解析超过 `tokenizeTimeLimit` 会中止。该行在下一个空闲回合再试一次（首次解析要编译语法规则，可能一次性很慢），再超时就按纯文本渲染，之后不再重试。
 - 可见区域按时间分片处理：空闲回合每片最多 12ms；输入和滚动在编辑器 update 内同步处理，最多 6ms，剩下的行交给空闲回合。没轮到的行沿用上一次的高亮，不会闪成纯文本。
 - 每行的 token 都有缓存，滚动不重算；编辑后只从改动行往后重算，到语法状态和之前一致就停。
@@ -167,7 +167,7 @@ TextMate 解析一行的开销随行长超线性增长。同一段压缩后的 J
 
 想让压缩文件打开得更顺，可以把 `tokenizeMaxLineLength` 调到 `10000`、`tokenizeTimeLimit` 调到 `200`，代价是更多行按纯文本显示。
 
-注意：被跳过的行不会改变语法状态。如果它里面有没闭合的字符串或注释，后面几行的高亮可能不对，直到遇到重置状态的行为止。VS Code 对超过 `editor.maxTokenizationLineLength` 的行也是这么处理的。
+注意：超长行只解析了开头，超时的行完全没解析。如果没解析的那部分改变了语法状态，比如在行尾打开了一个模板字符串或注释，后面几行的高亮可能不对，直到遇到重置状态的行为止。VS Code 对超过 `editor.maxTokenizationLineLength` 的行整行不解析，问题更明显，这里解析开头就是为了让压缩产物开头那种「license 注释在长行开头才闭合」的情况能正常收尾。
 
 ## `createLangResolver(loaders)`
 

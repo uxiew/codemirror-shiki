@@ -27,6 +27,14 @@ const CACHE_MAX_ENTRIES = 12000;
 const CACHE_KEEP_BEHIND_LINES = 3000;
 const CACHE_KEEP_AHEAD_LINES = 6000;
 const CACHE_ANCHOR_INTERVAL = 200;
+/**
+ * How many leading characters of an over-long line are still tokenized.
+ * CodeMirror hides the rest of such a line behind a line gap anyway, and the
+ * grammar state after the head is a far better guess for the following lines
+ * than the state before the line: a minified bundle typically closes its
+ * license comment at the start of its first long line.
+ */
+const LONG_LINE_HEAD_CHARS = 4000;
 
 export interface CachePruneOptions {
   maxEntries?: number;
@@ -74,12 +82,15 @@ export interface LineCacheEntry {
   startState: GrammarState | null;
   endState: GrammarState | null;
   tokens: ArrayLike<number> | null;
+  /** How many leading characters `tokens` cover; shorter than the text for over-long lines. */
+  tokenizedLength: number;
   retry: boolean;
 }
 
 interface BoundedTokenizeResult {
   tokens: ArrayLike<number> | null;
   ruleStack: GrammarState | null;
+  tokenizedLength: number;
   /** Tokenization was cut off by a time limit. */
   timedOut: boolean;
   /** The limit that cut it off came from the caller's deadline, not from `tokenizeTimeLimit`. */
@@ -304,12 +315,14 @@ export class ShikiHighlighter extends Base {
   /**
    * Tokenize one line, or give up on it.
    *
-   * A line longer than `tokenizeMaxLineLength`, or one whose tokenization runs
-   * past `tokenizeTimeLimit`, comes back with `tokens: null` and is rendered as
-   * plain text. The grammar state is carried through unchanged, which is what
-   * VS Code does for such lines too. Without this guard a single minified line
-   * of 50K characters blocks the main thread for seconds, because TextMate
-   * scanning cost grows faster than linearly with line length.
+   * Only the first `LONG_LINE_HEAD_CHARS` characters of a line longer than
+   * `tokenizeMaxLineLength` are tokenized; the rest is rendered as plain text
+   * and the state after the head is passed on. A line whose tokenization runs
+   * past `tokenizeTimeLimit` comes back with `tokens: null`, is rendered plain
+   * and passes its start state on unchanged, like VS Code does. Without these
+   * guards a single minified line of 50K characters blocks the main thread for
+   * seconds, because TextMate scanning cost grows faster than linearly with
+   * line length.
    */
   private tokenizeLineBounded(
     grammar: any,
@@ -318,13 +331,9 @@ export class ShikiHighlighter extends Base {
     budget: HighlightBudgetOptions,
   ): BoundedTokenizeResult {
     const maxLineLength = Number(this.configs.tokenizeMaxLineLength) || 0;
+    let source = text;
     if (maxLineLength > 0 && text.length > maxLineLength) {
-      return {
-        tokens: null,
-        ruleStack: state,
-        timedOut: false,
-        boundByDeadline: false,
-      };
+      source = text.slice(0, Math.min(maxLineLength, LONG_LINE_HEAD_CHARS));
     }
 
     const configuredLimit = Number(this.configs.tokenizeTimeLimit) || 0;
@@ -341,13 +350,20 @@ export class ShikiHighlighter extends Base {
       }
     }
 
-    const result = grammar.tokenizeLine2(text, state as any, timeLimit);
+    const result = grammar.tokenizeLine2(source, state as any, timeLimit);
     if (result.stoppedEarly) {
-      return { tokens: null, ruleStack: state, timedOut: true, boundByDeadline };
+      return {
+        tokens: null,
+        ruleStack: state,
+        tokenizedLength: 0,
+        timedOut: true,
+        boundByDeadline,
+      };
     }
     return {
       tokens: result.tokens,
       ruleStack: result.ruleStack ?? null,
+      tokenizedLength: source.length,
       timedOut: false,
       boundByDeadline: false,
     };
@@ -394,6 +410,7 @@ export class ShikiHighlighter extends Base {
         startState: state,
         endState: result.ruleStack,
         tokens: result.tokens,
+        tokenizedLength: result.tokenizedLength,
         retry,
       };
       this.lineCache.set(line.number, entry);
@@ -568,6 +585,7 @@ export class ShikiHighlighter extends Base {
           produced += this.emitLineTokens(
             line,
             entry.tokens,
+            entry.tokenizedLength,
             colorMap,
             defaultForeground,
             buildDeco,
@@ -620,6 +638,7 @@ export class ShikiHighlighter extends Base {
   private emitLineTokens(
     line: Line,
     tokens: ArrayLike<number>,
+    tokenizedLength: number,
     colorMap: string[],
     defaultForeground: string,
     buildDeco: (from: number, to: number, mark: Decoration) => void,
@@ -630,10 +649,11 @@ export class ShikiHighlighter extends Base {
     const len = tokens.length / 2;
 
     // tokens format: [startOffset1, metadata1, startOffset2, metadata2, ...]
-    // Each token starts at tokens[2*j] and ends at the next token's start (or line end)
+    // Each token starts at tokens[2*j] and ends at the next token's start, or
+    // at the end of the tokenized text (the whole line unless it is over-long).
     for (let j = 0; j < len; j++) {
       const startOffset = tokens[2 * j];
-      const endOffset = j + 1 < len ? tokens[2 * (j + 1)] : line.length;
+      const endOffset = j + 1 < len ? tokens[2 * (j + 1)] : tokenizedLength;
       const tokenFrom = Math.max(line.from + startOffset, from);
       const tokenTo = Math.min(line.from + endOffset, to);
       if (tokenFrom >= tokenTo) continue; // empty, or outside the requested range

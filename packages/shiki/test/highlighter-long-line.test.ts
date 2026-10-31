@@ -4,23 +4,29 @@ import { Text } from '@codemirror/state';
 import { createMockHighlighter, simpleTokenizer } from './helpers/mock-highlighter';
 
 describe('ShikiHighlighter: long line protection', () => {
-  it('leaves lines over tokenizeMaxLineLength plain and carries the state through', () => {
+  it('tokenizes only the head of a line over tokenizeMaxLineLength and continues from its state', () => {
     const { highlighter, grammar } = createMockHighlighter(simpleTokenizer, {
       tokenizeMaxLineLength: 10,
     });
     const longLine = 'x'.repeat(50);
     const doc = Text.of(['short', longLine, 'after']);
 
-    const decorated: number[] = [];
-    highlighter.highlight(doc, 0, doc.length, (from) => {
-      decorated.push(doc.lineAt(from).number);
+    const decorated: [number, number, number][] = [];
+    highlighter.highlight(doc, 0, doc.length, (from, to) => {
+      decorated.push([doc.lineAt(from).number, from, to]);
     });
 
-    expect(decorated).toEqual([1, 3]);
+    const line2 = doc.line(2);
+    expect(decorated).toEqual([
+      [1, 0, 5],
+      // Only the first 10 characters of the long line carry a decoration.
+      [2, line2.from, line2.from + 10],
+      [3, doc.line(3).from, doc.line(3).to],
+    ]);
     const tokenizedTexts = grammar.tokenizeLine2.mock.calls.map((c) => c[0]);
-    expect(tokenizedTexts).toEqual(['short', 'after']);
-    // Line 3 starts from line 1's state because the long line did not change it.
-    expect(grammar.tokenizeLine2.mock.calls[1][1].id).toBe('short');
+    expect(tokenizedTexts).toEqual(['short', 'x'.repeat(10), 'after']);
+    // Line 3 starts from the state after the long line's head.
+    expect(grammar.tokenizeLine2.mock.calls[2][1].id).toBe('x'.repeat(10));
   });
 
   it('passes tokenizeTimeLimit and treats lines that time out twice as plain', () => {
