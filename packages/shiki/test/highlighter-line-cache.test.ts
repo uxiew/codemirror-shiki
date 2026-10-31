@@ -80,8 +80,10 @@ describe('ShikiHighlighter: per-line token cache', () => {
         : simpleTokenizer(text, state),
     );
     const doc = Text.of(['a', 'slow', 'b']);
-    highlighter.highlight(doc, 0, doc.length, () => {});
-    expect(tokenizedSince()).toEqual(['a', 'slow', 'b']);
+    // Two timeouts make the line plain for good.
+    const first = highlighter.highlight(doc, 0, doc.length, () => {});
+    highlighter.highlight(doc, first.nextFrom!, doc.length, () => {});
+    expect(tokenizedSince()).toEqual(['a', 'slow', 'slow', 'b']);
 
     highlighter.highlight(doc, 0, doc.length, () => {});
     expect(tokenizedSince()).toEqual([]);

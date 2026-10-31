@@ -23,7 +23,7 @@ describe('ShikiHighlighter: long line protection', () => {
     expect(grammar.tokenizeLine2.mock.calls[1][1].id).toBe('short');
   });
 
-  it('passes tokenizeTimeLimit and treats stoppedEarly lines as plain', () => {
+  it('passes tokenizeTimeLimit and treats lines that time out twice as plain', () => {
     const { highlighter, grammar } = createMockHighlighter(
       (text, state, timeLimit) => {
         if (text === 'slow') {
@@ -36,13 +36,17 @@ describe('ShikiHighlighter: long line protection', () => {
     const doc = Text.of(['a', 'slow', 'b']);
 
     const decorated: number[] = [];
-    highlighter.highlight(doc, 0, doc.length, (from) => {
+    const collect = (from: number) => {
       decorated.push(doc.lineAt(from).number);
-    });
+    };
+    // The first timeout asks for a retry; the second makes the line plain.
+    const first = highlighter.highlight(doc, 0, doc.length, collect);
+    highlighter.highlight(doc, first.nextFrom!, doc.length, collect);
 
     expect(decorated).toEqual([1, 3]);
     expect(grammar.tokenizeLine2.mock.calls[1][2]).toBe(250);
-    expect(grammar.tokenizeLine2.mock.calls[2][1].id).toBe('a');
+    // Line 3 starts from line 1's state because the plain line did not change it.
+    expect(grammar.tokenizeLine2.mock.calls[3][1].id).toBe('a');
   });
 
   it('tokenizes without a limit when both options are 0', () => {

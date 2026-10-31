@@ -71,6 +71,55 @@ describe('ShikiHighlighter: deadline budget', () => {
     expect(grammar.tokenizeLine2.mock.calls[2][2]).toBe(500);
   });
 
+  it('retries a line that timed out once and gives up after the second timeout', () => {
+    let slowCalls = 0;
+    const { highlighter, tokenizedSince } = createMockHighlighter((text, state) => {
+      if (text !== 'slow') return simpleTokenizer(text, state);
+      slowCalls++;
+      return { tokens: [], ruleStack: null, stoppedEarly: true };
+    });
+    const doc = Text.of(['a', 'slow', 'b']);
+
+    // First strike: the pass yields here so the retry runs in a fresh chunk.
+    const first = highlighter.highlight(doc, 0, doc.length, () => {});
+    expect(first.nextFrom).toBe(doc.line(2).from);
+    expect(tokenizedSince()).toEqual(['a', 'slow']);
+
+    // Second strike: the line turns plain and the pass moves on.
+    let count = 0;
+    const second = highlighter.highlight(doc, first.nextFrom!, doc.length, () => count++);
+    expect(second.nextFrom).toBeNull();
+    expect(count).toBe(1);
+    expect(tokenizedSince()).toEqual(['slow', 'b']);
+
+    // Plain for good: no third attempt.
+    highlighter.highlight(doc, 0, doc.length, () => {});
+    expect(tokenizedSince()).toEqual([]);
+    expect(slowCalls).toBe(2);
+  });
+
+  it('succeeds on the retry when the first timeout was a one-time cost', () => {
+    let slowCalls = 0;
+    const { highlighter } = createMockHighlighter((text, state) => {
+      if (text !== 'slow') return simpleTokenizer(text, state);
+      slowCalls++;
+      return slowCalls === 1
+        ? { tokens: [], ruleStack: null, stoppedEarly: true }
+        : simpleTokenizer(text, state);
+    });
+    const doc = Text.of(['slow', 'b']);
+
+    const first = highlighter.highlight(doc, 0, doc.length, () => {});
+    expect(first.nextFrom).toBe(0);
+    expect(highlighter.isWarm).toBe(false);
+
+    let count = 0;
+    const second = highlighter.highlight(doc, 0, doc.length, () => count++);
+    expect(second.nextFrom).toBeNull();
+    expect(count).toBe(2);
+    expect(highlighter.isWarm).toBe(true);
+  });
+
   it('does not shorten the line limit without deferSlowLines', () => {
     const { highlighter, grammar } = createMockHighlighter(simpleTokenizer);
     const doc = Text.of(['a']);

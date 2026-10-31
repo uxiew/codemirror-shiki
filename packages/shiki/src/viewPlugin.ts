@@ -175,7 +175,8 @@ interface HighlightOptions {
   coarse?: boolean;
   /**
    * Run the first chunk right now, inside the current update, with a small
-   * budget. Whatever is left continues in idle callbacks.
+   * budget. Whatever is left continues in idle callbacks. Ignored while the
+   * grammar is cold, so compiling it never blocks editor creation.
    */
   sync?: boolean;
 }
@@ -197,7 +198,7 @@ class ShikiView {
     public shikiHighlighter: ShikiHighlighter,
     view: EditorView,
   ) {
-    // Style what is cheap right away so the first frame is not plain text.
+    // With a warm grammar this styles the first frame right away.
     this.updateHighlight(view, { sync: true });
   }
 
@@ -298,6 +299,7 @@ class ShikiView {
     const ranges = options.coarse
       ? trimRangesByLineBudget(doc, visibleRanges)
       : visibleRanges;
+    const startSync = !!options.sync && this.shikiHighlighter.isWarm;
     const requestId = ++this.highlightRequestId;
 
     if (doc.length === 0 || ranges.length === 0) {
@@ -375,7 +377,7 @@ class ShikiView {
       }
     };
 
-    if (options.sync) {
+    if (startSync) {
       runChunk(SYNC_PASS_BUDGET_MS, true);
     } else {
       this.pendingHighlight = requestIdleCallback(() =>

@@ -65,21 +65,25 @@ export interface HighlightResult {
  * Cached tokenization of one line.
  *
  * `tokens === null` means the line is rendered as plain text because it is
- * longer than `tokenizeMaxLineLength` or ran past `tokenizeTimeLimit`. Such a
- * line is not retried while its text and start state stay the same.
+ * longer than `tokenizeMaxLineLength` or ran past `tokenizeTimeLimit`. With
+ * `retry` set the next pass tokenizes it once more; otherwise it stays plain
+ * while its text and start state stay the same.
  */
 export interface LineCacheEntry {
   text: string;
   startState: GrammarState | null;
   endState: GrammarState | null;
   tokens: ArrayLike<number> | null;
+  retry: boolean;
 }
 
 interface BoundedTokenizeResult {
   tokens: ArrayLike<number> | null;
   ruleStack: GrammarState | null;
-  /** Did not finish in the time left before the deadline; try again later. */
-  deferred: boolean;
+  /** Tokenization was cut off by a time limit. */
+  timedOut: boolean;
+  /** The limit that cut it off came from the caller's deadline, not from `tokenizeTimeLimit`. */
+  boundByDeadline: boolean;
 }
 
 /**
@@ -225,6 +229,15 @@ export class ShikiHighlighter extends Base {
     this.internal = shikiCore;
   }
 
+  /**
+   * True once at least one line was tokenized. A cold grammar still has to
+   * compile its rules, which can take hundreds of milliseconds; callers use
+   * this to keep that cost out of synchronous passes.
+   */
+  get isWarm(): boolean {
+    return this.freshLines > 0;
+  }
+
   setView(view: any) {
     if (view !== this.view) {
       // Classes are mounted on a view's root; a new view needs them mounted again.
@@ -306,7 +319,12 @@ export class ShikiHighlighter extends Base {
   ): BoundedTokenizeResult {
     const maxLineLength = Number(this.configs.tokenizeMaxLineLength) || 0;
     if (maxLineLength > 0 && text.length > maxLineLength) {
-      return { tokens: null, ruleStack: state, deferred: false };
+      return {
+        tokens: null,
+        ruleStack: state,
+        timedOut: false,
+        boundByDeadline: false,
+      };
     }
 
     const configuredLimit = Number(this.configs.tokenizeTimeLimit) || 0;
@@ -325,20 +343,25 @@ export class ShikiHighlighter extends Base {
 
     const result = grammar.tokenizeLine2(text, state as any, timeLimit);
     if (result.stoppedEarly) {
-      return { tokens: null, ruleStack: state, deferred: boundByDeadline };
+      return { tokens: null, ruleStack: state, timedOut: true, boundByDeadline };
     }
     return {
       tokens: result.tokens,
       ruleStack: result.ruleStack ?? null,
-      deferred: false,
+      timedOut: false,
+      boundByDeadline: false,
     };
   }
 
   /**
    * Tokens and end state for one line: from the cache when text and start
    * state still match, otherwise freshly tokenized. Returns `null` when the
-   * line was deferred (see `deferSlowLines`). Callers walk lines in order
-   * from a trusted anchor, which is what lets `validUpTo` advance.
+   * line has to be tried again in a later pass: either the caller's deadline
+   * cut it off (see `deferSlowLines`), or it ran past `tokenizeTimeLimit` for
+   * the first time. One-time costs such as lazy grammar compilation land on
+   * that first attempt, so a line only turns plain after timing out twice.
+   * Callers walk lines in order from a trusted anchor, which is what lets
+   * `validUpTo` advance.
    */
   private resolveLine(
     line: Line,
@@ -347,12 +370,12 @@ export class ShikiHighlighter extends Base {
     budget: HighlightBudgetOptions,
   ): LineCacheEntry | null {
     const cached = this.lineCache.get(line.number);
-    let entry: LineCacheEntry;
-    if (
-      cached &&
+    const cachedMatches =
+      cached !== undefined &&
       cached.text === line.text &&
-      grammarStatesEqual(cached.startState, state)
-    ) {
+      grammarStatesEqual(cached.startState, state);
+    let entry: LineCacheEntry;
+    if (cachedMatches && !(cached.tokens === null && cached.retry)) {
       entry = cached;
     } else {
       const result = this.tokenizeLineBounded(
@@ -361,15 +384,21 @@ export class ShikiHighlighter extends Base {
         state,
         budget,
       );
-      if (result.deferred) return null;
-      this.freshLines++;
+      if (result.timedOut && result.boundByDeadline) return null;
+
+      // A timeout against `tokenizeTimeLimit` counts as a strike; the second
+      // strike makes the line plain. Deadline cut-offs are not strikes.
+      const retry = result.timedOut && !cachedMatches;
       entry = {
         text: line.text,
         startState: state,
         endState: result.ruleStack,
         tokens: result.tokens,
+        retry,
       };
       this.lineCache.set(line.number, entry);
+      if (retry) return null;
+      this.freshLines++;
     }
     if (line.number === this.validUpTo + 1) this.validUpTo = line.number;
     return entry;

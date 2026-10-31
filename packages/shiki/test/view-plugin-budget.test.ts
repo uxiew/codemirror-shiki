@@ -20,7 +20,10 @@ function createCore(tokenizeLine2: (...args: any[]) => any) {
   };
 }
 
-async function createView(doc: string, tokenizeLine2: (...args: any[]) => any) {
+const oneToken = () => ({ tokens: [0, 2 << 15], ruleStack: null });
+const flushIdle = () => new Promise((r) => setTimeout(r, 30));
+
+async function createExtension(tokenizeLine2: (...args: any[]) => any) {
   const { shiki } = await shikiToCodeMirror({
     highlighter: createCore(tokenizeLine2) as any,
     lang: 'javascript',
@@ -28,6 +31,10 @@ async function createView(doc: string, tokenizeLine2: (...args: any[]) => any) {
     defaultColor: 'dark',
     themeStyle: 'shiki',
   });
+  return shiki;
+}
+
+function mount(doc: string, shiki: any) {
   const parent = document.createElement('div');
   document.body.appendChild(parent);
   const view = new EditorView({
@@ -44,19 +51,40 @@ async function createView(doc: string, tokenizeLine2: (...args: any[]) => any) {
   };
 }
 
-const oneToken = () => ({ tokens: [0, 2 << 15], ruleStack: null });
-const flushIdle = () => new Promise((r) => setTimeout(r, 30));
+/** A mounted editor whose grammar has already tokenized once. */
+async function createWarmView(doc: string, tokenizeLine2: (...args: any[]) => any) {
+  const shiki = await createExtension(tokenizeLine2);
+  const mounted = mount(doc, shiki);
+  await flushIdle();
+  return { ...mounted, shiki };
+}
 
 describe('shiki view plugin: budgeted highlighting', () => {
-  it('styles the first frame synchronously when the work is cheap', async () => {
-    const { styledSpans, cleanup } = await createView('a\nb\nc', vi.fn(oneToken));
+  it('highlights a cold grammar in idle time, not inside editor creation', async () => {
+    const tokenize = vi.fn(oneToken);
+    const shiki = await createExtension(tokenize);
+    const { styledSpans, cleanup } = mount('a\nb\nc', shiki);
+
+    expect(tokenize).not.toHaveBeenCalled();
+    expect(styledSpans()).toBe(0);
+
+    await flushIdle();
+    expect(styledSpans()).toBe(3);
+    cleanup();
+  });
+
+  it('styles the first frame synchronously once the grammar is warm', async () => {
+    const warm = await createWarmView('x', vi.fn(oneToken));
+    warm.cleanup();
+
+    const { styledSpans, cleanup } = mount('a\nb\nc', warm.shiki);
     expect(styledSpans()).toBe(3);
     cleanup();
   });
 
   it('re-styles the edited line inside the same update', async () => {
     const tokenize = vi.fn(oneToken);
-    const { view, cleanup } = await createView('a\nb', tokenize);
+    const { view, cleanup } = await createWarmView('a\nb', tokenize);
     tokenize.mockClear();
 
     view.dispatch({ changes: { from: 0, insert: 'x' } });
@@ -74,12 +102,16 @@ describe('shiki view plugin: budgeted highlighting', () => {
         ? { tokens: [], ruleStack: null, stoppedEarly: true }
         : oneToken();
     });
-    const { styledSpans, cleanup } = await createView('a\nslow\nb', tokenize);
+    const { view, styledSpans, cleanup } = await createWarmView('a\nb', tokenize);
 
-    // The synchronous pass could not finish the slow line; it stopped there.
+    view.dispatch({ changes: { from: 1, insert: '\nslow' } });
+    expect(view.state.doc.toString()).toBe('a\nslow\nb');
+
+    // The synchronous pass could not finish the slow line and stopped there;
+    // the lines after it keep their previous decorations.
     expect(limits).toHaveLength(1);
     expect(limits[0]).toBeLessThanOrEqual(6);
-    expect(styledSpans()).toBe(1);
+    expect(styledSpans()).toBe(2);
 
     await flushIdle();
 
@@ -96,7 +128,7 @@ describe('shiki view plugin: budgeted highlighting', () => {
       }
       return oneToken();
     });
-    const { view, styledSpans, cleanup } = await createView('a\nb\nc', tokenize);
+    const { view, styledSpans, cleanup } = await createWarmView('a\nb\nc', tokenize);
     expect(styledSpans()).toBe(3);
 
     // Editing line 1 invalidates b's start state; b now takes too long for
