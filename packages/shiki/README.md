@@ -149,8 +149,25 @@ view.dispatch({
 | --- | --- | --- | --- |
 | `cssVariablePrefix` | `string` | `'--shiki-'` | CSS 变量前缀 |
 | `includeExplanation` | `boolean` | `false` | 是否保留 explanation |
-| `tokenizeMaxLineLength` | `number` | `20000` | 超长行保护 |
-| `tokenizeTimeLimit` | `number` | `500` | 单次 tokenization 时间上限 |
+| `tokenizeMaxLineLength` | `number` | `20000` | 超过这个字符数的行不做语法解析，按纯文本渲染。`0` 表示不限制。详见下文「超长行与压缩产物」 |
+| `tokenizeTimeLimit` | `number` | `500` | 单行解析的毫秒上限。超时的行重试一次，再超时就按纯文本渲染。`0` 表示不限制 |
+
+### 超长行与压缩产物
+
+TextMate 解析一行的开销随行长超线性增长。同一段压缩后的 JS，用 oniguruma 引擎在 Node 24 下实测：前 5000 字符 46ms，前 10000 字符 353ms，整行 53569 字符 4273ms；javascript 引擎慢 10 倍以上。压缩产物里常有几十万字符的行，不加保护就是秒级卡死。
+
+所以高亮按下面的规则干活：
+
+- 超过 `tokenizeMaxLineLength` 的行跳过解析，按主题默认前景色渲染，语法状态原样传给下一行。
+- 单行解析超过 `tokenizeTimeLimit` 会中止。该行在下一个空闲回合再试一次（首次解析要编译语法规则，可能一次性很慢），再超时就按纯文本渲染，之后不再重试。
+- 可见区域按时间分片处理：空闲回合每片最多 12ms；输入和滚动在编辑器 update 内同步处理，最多 6ms，剩下的行交给空闲回合。没轮到的行沿用上一次的高亮，不会闪成纯文本。
+- 每行的 token 都有缓存，滚动不重算；编辑后只从改动行往后重算，到语法状态和之前一致就停。
+
+实测一个 11 行、最长行 53K 字符的压缩文件（jsdom + oniguruma）：初始高亮从阻塞 13.7 秒降到最长一片 48ms；在最长行敲一个字，从同步阻塞 12.3 秒降到 2ms。
+
+想让压缩文件打开得更顺，可以把 `tokenizeMaxLineLength` 调到 `10000`、`tokenizeTimeLimit` 调到 `200`，代价是更多行按纯文本显示。
+
+注意：被跳过的行不会改变语法状态。如果它里面有没闭合的字符串或注释，后面几行的高亮可能不对，直到遇到重置状态的行为止。VS Code 对超过 `editor.maxTokenizationLineLength` 的行也是这么处理的。
 
 ## `createLangResolver(loaders)`
 
