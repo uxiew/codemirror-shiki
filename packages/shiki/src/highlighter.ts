@@ -44,6 +44,12 @@ export interface HighlightResult {
   nextFrom: number | null;
 }
 
+interface BoundedTokenizeResult {
+  /** Binary tokens from `tokenizeLine2`, or `null` when the line is left plain. */
+  tokens: ArrayLike<number> | null;
+  ruleStack: GrammarState | null;
+}
+
 /**
  * Compute which cached line states should be removed to bound memory growth.
  * Keeps a dense window around the current viewport and sparse anchor states elsewhere.
@@ -125,6 +131,34 @@ export class ShikiHighlighter extends Base {
     } finally {
       this.isCoreUpdating = false;
     }
+  }
+
+  /**
+   * Tokenize one line, or give up on it.
+   *
+   * A line longer than `tokenizeMaxLineLength`, or one whose tokenization runs
+   * past `tokenizeTimeLimit`, comes back with `tokens: null` and is rendered as
+   * plain text. The grammar state is carried through unchanged, which is what
+   * VS Code does for such lines too. Without this guard a single minified line
+   * of 50K characters blocks the main thread for seconds, because TextMate
+   * scanning cost grows faster than linearly with line length.
+   */
+  private tokenizeLineBounded(
+    grammar: any,
+    text: string,
+    state: GrammarState | null,
+  ): BoundedTokenizeResult {
+    const maxLineLength = Number(this.configs.tokenizeMaxLineLength) || 0;
+    if (maxLineLength > 0 && text.length > maxLineLength) {
+      return { tokens: null, ruleStack: state };
+    }
+
+    const timeLimit = Number(this.configs.tokenizeTimeLimit) || 0;
+    const result = grammar.tokenizeLine2(text, state as any, timeLimit);
+    if (result.stoppedEarly) {
+      return { tokens: null, ruleStack: state };
+    }
+    return { tokens: result.tokens, ruleStack: result.ruleStack ?? null };
   }
 
   private pruneGrammarStateCache(centerLine: number) {
@@ -258,12 +292,12 @@ export class ShikiHighlighter extends Base {
           let bridgeState = state; // Start from nearest state (or undefined if nearest=0)
           for (let i = nearest + 1; i <= stateLine; i++) {
             const lineContent = doc.line(i).text;
-            // Use tokenizeLine2 (v2) which handles colors internally
-            const result = grammar.tokenizeLine2(
+            const result = this.tokenizeLineBounded(
+              grammar,
               lineContent,
-              bridgeState as any,
+              bridgeState ?? null,
             );
-            bridgeState = result.ruleStack;
+            bridgeState = result.ruleStack ?? undefined;
             this.grammarStateCache.set(i, bridgeState!);
           }
           state = bridgeState;
@@ -290,13 +324,21 @@ export class ShikiHighlighter extends Base {
 
       const line = doc.line(i);
       const lineContent = line.text;
-      // Use tokenizeLine2 for performance and correct ID mapping
-      const result = grammar.tokenizeLine2(lineContent, currentState as any);
+      const result = this.tokenizeLineBounded(
+        grammar,
+        lineContent,
+        currentState ?? null,
+      );
 
       // Update cache for next lines
-      currentState = result.ruleStack;
+      currentState = result.ruleStack ?? undefined;
       this.grammarStateCache.set(i, currentState!);
       this.lastCachedLine = Math.max(this.lastCachedLine, i);
+
+      if (result.tokens === null) {
+        lastProcessedLine = i;
+        continue;
+      }
 
       const tokens = result.tokens;
       const len = tokens.length / 2;
