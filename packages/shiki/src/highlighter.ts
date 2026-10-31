@@ -29,12 +29,15 @@ const CACHE_KEEP_AHEAD_LINES = 6000;
 const CACHE_ANCHOR_INTERVAL = 200;
 /**
  * How many leading characters of an over-long line are still tokenized.
- * CodeMirror hides the rest of such a line behind a line gap anyway, and the
- * grammar state after the head is a far better guess for the following lines
- * than the state before the line: a minified bundle typically closes its
- * license comment at the start of its first long line.
+ * CodeMirror renders only the visible columns of such a line plus a margin of
+ * about 2000 characters, and the grammar state after the head is a far better
+ * guess for the following lines than the state before the line: a minified
+ * bundle typically closes its license comment at the start of its first long
+ * line. Measured in Chrome with the oniguruma engine, dense minified code
+ * costs 180 to 260ms per 4000 characters and about 100ms for 2000, which is
+ * the one-time hitch accepted per long line.
  */
-const LONG_LINE_HEAD_CHARS = 4000;
+const LONG_LINE_HEAD_CHARS = 2000;
 
 export interface CachePruneOptions {
   maxEntries?: number;
