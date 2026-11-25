@@ -1,7 +1,9 @@
 <template>
   <div class="editor-host">
-    <p v-if="loadError" role="alert" class="p-4 text-sm text-gray-300">{{ loadError }}</p>
-    <p v-else-if="!editorInstance" role="status" class="p-4 text-sm text-gray-300">Loading highlighter…</p>
+    <p v-if="loadError" role="alert" class="editor-message">{{ loadError }}</p>
+    <p v-else-if="!editorInstance" role="status" class="editor-message">
+      正在加载语法与主题…
+    </p>
     <div class="editor-host" ref="editorView"></div>
   </div>
 </template>
@@ -22,15 +24,22 @@ import {
   indentWithTab,
   historyKeymap,
 } from "@codemirror/commands";
-import { bundledLanguagesInfo } from "shiki/langs";
 import { bundledThemesInfo } from "shiki/themes";
 import { ShikiEditor } from "@cmshiki/editor";
 import { shikiToCodeMirror } from "@cmshiki/shiki";
-import { nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
+import {
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  shallowRef,
+  watch,
+} from "vue";
 import { type CMProps } from "./types";
 import { createHighlighterCore, type HighlighterCore } from "shiki/core";
 import { createOnigurumaEngine } from "shiki/engine/oniguruma";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
+import { getLanguage, loadGrammars } from "./grammars";
 
 const props = defineProps<CMProps>();
 
@@ -42,6 +51,7 @@ let runId = 0;
 
 const emit = defineEmits<{
   perf: [number];
+  change: [string];
 }>();
 
 function createSharedExtensions(): Extension[] {
@@ -52,6 +62,11 @@ function createSharedExtensions(): Extension[] {
     drawSelection(),
     lineNumbers(),
     highlightActiveLine(),
+    EditorView.updateListener.of((update) => {
+      if (update.docChanged && !props.readonly) {
+        emit("change", update.state.doc.toString());
+      }
+    }),
     ...(props.readonly
       ? [EditorState.readOnly.of(true), EditorView.editable.of(false)]
       : []),
@@ -80,20 +95,16 @@ watch(
     }
 
     if (!editorInstance.value) return;
-    const start = performance.now();
     syncDocument(nextValues[0] as string);
-    await nextTick();
-    emit("perf", performance.now() - start);
   },
 );
 
-function createPlaygroundHighlighter(lang: string, theme: string) {
-  const language = bundledLanguagesInfo.find(({ id }) => id === lang);
+async function createPlaygroundHighlighter(lang: string, theme: string) {
   const themeInfo = bundledThemesInfo.find(({ id }) => id === theme);
-  if (!language || !themeInfo) throw new Error("Unknown language or theme");
+  if (!themeInfo) throw new Error("Unknown theme");
 
   return createHighlighterCore({
-    langs: [language.import()],
+    langs: await loadGrammars(lang),
     themes: [themeInfo.import()],
     engine:
       props.engine === "javascript"
@@ -140,6 +151,7 @@ async function run() {
   const currentRunId = ++runId;
   const parent = editorView.value;
   const lang = props.lang.name;
+  const highlightLang = getLanguage(lang).host;
   const theme = props.theme.name;
   loadError.value = "";
   disposeEditor();
@@ -157,7 +169,7 @@ async function run() {
     if (props.mode === "editor") {
       nextInstance = await ShikiEditor.create({
         highlighter,
-        lang,
+        lang: highlightLang,
         themes: { light: theme },
         defaultColor: "light",
         themeStyle: "cm",
@@ -169,7 +181,7 @@ async function run() {
     } else {
       const { shiki } = await shikiToCodeMirror({
         highlighter,
-        lang,
+        lang: highlightLang,
         theme,
         themeStyle: "cm",
         defaultColor: "light",
@@ -196,7 +208,7 @@ async function run() {
     if (currentRunId === runId) emit("perf", performance.now() - start);
   } catch (error) {
     if (currentRunId !== runId) return;
-    loadError.value = `Could not highlight ${lang} with ${theme}.`;
+    loadError.value = `无法加载 ${lang} / ${theme}，请切换语法或正则引擎后重试。`;
     console.error(loadError.value, error);
   } finally {
     highlighter?.dispose();
@@ -226,7 +238,47 @@ if (import.meta.hot) {
   background-color: transparent;
 }
 
+.editor-message {
+  padding: 24px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 :deep(.cm-editor) {
   height: 100%;
+}
+
+:deep(.cm-scroller) {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  line-height: 1.85;
+}
+
+:deep(.cm-content) {
+  padding: 20px 0 80px;
+}
+
+:deep(.cm-line) {
+  padding: 0 24px 0 16px;
+}
+
+:deep(.cm-gutters) {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+
+:deep(.cm-lineNumbers .cm-gutterElement) {
+  min-width: 48px;
+  padding: 0 12px;
+}
+
+:deep(.cm-activeLine),
+:deep(.cm-activeLineGutter) {
+  background: color-mix(in srgb, currentColor 4%, transparent);
+}
+
+:deep(.cm-focused) {
+  outline: none;
 }
 </style>
