@@ -33,7 +33,9 @@ export const configsFacet = Facet.define<ShikiToCMOptions, ShikiToCMOptions>({
 export class Base {
   protected themesCache = new Map<ThemeName, Extension>();
   protected currentTheme = 'light';
-  private readonly initShikiFn: InitShikiFn;
+  /** Theme alias an editor starts with, the one `initTheme` resolved. */
+  protected defaultTheme = 'light';
+  protected readonly initShikiFn: InitShikiFn;
 
   /** determines whether the theme style of the current option is `cm` or not */
   get isCmStyle() {
@@ -84,6 +86,7 @@ export class Base {
     }
 
     // init current theme
+    this.defaultTheme = resolvedColor;
     this.currentTheme = resolvedColor;
     return this.getTheme(this.currentTheme);
   }
@@ -133,13 +136,17 @@ export class Base {
    * @throws `xxxx theme not registered!`
    */
   getTheme(name: string = this.currentTheme) {
-    if (this.themesCache.get(name)) {
-      // Keep highlighter theme alias in sync with runtime theme switching.
-      this.currentTheme = name as any;
-      return this.themesCache.get(name)!;
-    } else {
-      throw new Error(`'${name}' theme is not registered!`);
-    }
+    const theme = this.themeFor(name);
+    // Keep highlighter theme alias in sync with runtime theme switching.
+    this.currentTheme = name as any;
+    return theme;
+  }
+
+  /** The theme extension for `name`, without switching to it. */
+  themeFor(name: string = this.currentTheme) {
+    const theme = this.themesCache.get(name);
+    if (!theme) throw new Error(`'${name}' theme is not registered!`);
+    return theme;
   }
 
   /**

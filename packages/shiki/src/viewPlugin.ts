@@ -222,7 +222,7 @@ class ShikiView {
 
   constructor(
     public shikiHighlighter: ShikiHighlighter,
-    view: EditorView,
+    private readonly view: EditorView,
   ) {
     // With a warm grammar this styles the first frame right away.
     this.updateHighlight(view, { sync: true });
@@ -232,6 +232,7 @@ class ShikiView {
     this.cancelPendingHighlight();
     this.cancelPendingViewportSettle();
     this.clearDecorations();
+    this.shikiHighlighter.releaseView(this.view);
   }
 
   update(update: ViewUpdate) {
@@ -533,7 +534,8 @@ export const shikiViewPlugin = (
 ) => {
   return {
     viewPlugin: ViewPlugin.define(
-      (view: EditorView) => new ShikiView(shikiHighlighter.setView(view), view),
+      (view: EditorView) =>
+        new ShikiView(shikiHighlighter.forView(view), view),
       {
         decorations: (v) => v.decorations,
       },

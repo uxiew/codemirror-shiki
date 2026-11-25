@@ -228,7 +228,7 @@ export function computePrunableCacheLines(
 }
 
 export class ShikiHighlighter extends Base {
-  view!: any;
+  view: any = undefined;
   /** Tokenization results per 1-based line number of `cacheDoc`. */
   private lineCache = new Map<number, LineCacheEntry>();
   /**
@@ -272,6 +272,50 @@ export class ShikiHighlighter extends Base {
   /** Lines tokenized so far; lets callers tell whether a pass made progress. */
   get tokenizedLines(): number {
     return this.freshLines;
+  }
+
+  /**
+   * Highlighter of each editor using this extension. Shared by the
+   * highlighter the extension was created with and every one forked from it.
+   */
+  private owners = new Map<any, ShikiHighlighter>();
+
+  /** The highlighter `view` uses, if it is an editor with this extension. */
+  ownerOf(view: any): ShikiHighlighter | undefined {
+    return this.owners.get(view);
+  }
+
+  /**
+   * The highlighter for `view`. Line caches, mark caches and the current
+   * theme belong to one editor, so a second editor using the same extension
+   * gets its own highlighter that shares the Shiki core and the options.
+   */
+  forView(view: any): ShikiHighlighter {
+    const owner = this.owners.get(view);
+    if (owner) return owner;
+    let highlighter: ShikiHighlighter = this;
+    if (this.view !== undefined) {
+      highlighter = new ShikiHighlighter(
+        this.shikiCore,
+        this.configs,
+        this.initShikiFn,
+      );
+      highlighter.owners = this.owners;
+      highlighter.defaultTheme = this.defaultTheme;
+      highlighter.currentTheme = this.defaultTheme;
+    }
+    this.owners.set(view, highlighter);
+    return highlighter.setView(view);
+  }
+
+  /** Drop `view` and what was cached for it once its editor is destroyed. */
+  releaseView(view: any) {
+    if (this.view !== view) return;
+    this.owners.delete(view);
+    this.view = undefined;
+    this.currentTheme = this.defaultTheme;
+    this.resetLineCache();
+    this.markCache.clear();
   }
 
   setView(view: any) {
