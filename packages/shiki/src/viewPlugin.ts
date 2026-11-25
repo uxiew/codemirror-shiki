@@ -9,6 +9,7 @@ import {
   RangeSet,
   RangeSetBuilder,
   StateEffect,
+  type Range,
   type Text,
 } from '@codemirror/state';
 
@@ -34,6 +35,16 @@ const RAPID_SCROLL_SETTLE_MS = 96;
 const COARSE_HIGHLIGHT_LINE_BUDGET = 240;
 /** How long one idle chunk may hold the main thread before yielding. */
 const CHUNK_TIME_BUDGET_MS = 12;
+/**
+ * Upper bound for an idle chunk when the browser reports a longer idle
+ * period, so catching up after a jump does not crawl at 12ms per frame.
+ */
+const MAX_IDLE_CHUNK_MS = 30;
+/**
+ * Budget for the speculative pass that styles a viewport the exact walk has
+ * not reached yet, so a jump or a scrollbar drag never shows plain text.
+ */
+const SPECULATIVE_BUDGET_MS = 8;
 /**
  * Budget for the pass that runs synchronously inside an editor update, so
  * typing and scrolling stay styled without a flash when the work is cheap.
@@ -160,10 +171,15 @@ export function trimRangesByLineBudget(
 }
 
 // Polyfill for requestIdleCallback
-const requestIdleCallback =
+const requestIdleCallback: (cb: (deadline?: IdleDeadline) => void) => number =
   typeof window !== 'undefined' && window.requestIdleCallback
     ? window.requestIdleCallback
-    : (cb: () => void) => setTimeout(cb, 1);
+    : (cb: () => void) => setTimeout(cb, 1) as unknown as number;
+
+function idleBudget(deadline?: IdleDeadline): number {
+  const remaining = deadline ? deadline.timeRemaining() : 0;
+  return Math.min(MAX_IDLE_CHUNK_MS, Math.max(CHUNK_TIME_BUDGET_MS, remaining));
+}
 
 const cancelIdleCallback =
   typeof window !== 'undefined' && window.cancelIdleCallback
@@ -301,6 +317,10 @@ class ShikiView {
       : visibleRanges;
     const startSync = !!options.sync && this.shikiHighlighter.isWarm;
     const requestId = ++this.highlightRequestId;
+    let speculate =
+      ranges.length > 0 &&
+      this.shikiHighlighter.isWarm &&
+      this.shikiHighlighter.needsSpeculation(doc, ranges[0].from);
 
     if (doc.length === 0 || ranges.length === 0) {
       this.decorations = RangeSet.empty;
@@ -311,6 +331,7 @@ class ShikiView {
     const requestedRanges = ranges.map((r) => ({ ...r }));
     const pendingRanges = ranges.slice();
     const entries: DecorationEntry[] = [];
+    let mergedEntries = -1;
 
     const runChunk = (budgetMs: number, sync: boolean) => {
       if (requestId !== this.highlightRequestId) {
@@ -324,6 +345,12 @@ class ShikiView {
         // Viewport moved on; its own update has scheduled a new highlight.
         this.pendingHighlight = null;
         return;
+      }
+
+      let changed = false;
+      if (speculate) {
+        speculate = false;
+        changed = this.applySpeculative(doc, pendingRanges);
       }
 
       const deadline = performance.now() + budgetMs;
@@ -364,15 +391,23 @@ class ShikiView {
       }
 
       if (requestId !== this.highlightRequestId) return;
-      this.decorations = this.mergeWithUnfinished(entries, pendingRanges, doc);
       this.pendingHighlight = null;
-
-      // Inside an update CodeMirror reads the new decorations itself.
-      if (!sync) view.dispatch({});
+      // A chunk that only walked towards the range has nothing new to show;
+      // skip the rebuild and the redraw it would cost.
+      if (
+        changed ||
+        entries.length !== mergedEntries ||
+        pendingRanges.length === 0
+      ) {
+        mergedEntries = entries.length;
+        this.decorations = this.mergeWithUnfinished(entries, pendingRanges, doc);
+        // Inside an update CodeMirror reads the new decorations itself.
+        if (!sync) view.dispatch({});
+      }
 
       if (pendingRanges.length > 0) {
-        this.pendingHighlight = requestIdleCallback(() =>
-          runChunk(CHUNK_TIME_BUDGET_MS, false),
+        this.pendingHighlight = requestIdleCallback((idle) =>
+          runChunk(idleBudget(idle), false),
         );
       }
     };
@@ -380,10 +415,53 @@ class ShikiView {
     if (startSync) {
       runChunk(SYNC_PASS_BUDGET_MS, true);
     } else {
-      this.pendingHighlight = requestIdleCallback(() =>
-        runChunk(CHUNK_TIME_BUDGET_MS, false),
+      this.pendingHighlight = requestIdleCallback((idle) =>
+        runChunk(idleBudget(idle), false),
       );
     }
+  }
+
+  /**
+   * Style ranges far past the trusted prefix from a guessed grammar state,
+   * replacing whatever they showed before. The exact pass that follows keeps
+   * these decorations for every range it has not finished yet. Returns
+   * whether anything was styled.
+   */
+  private applySpeculative(doc: Text, ranges: SimpleRange[]): boolean {
+    const deadline = performance.now() + SPECULATIVE_BUDGET_MS;
+    const marks: Range<Decoration>[] = [];
+    let coveredTo = -1;
+    try {
+      for (const range of ranges) {
+        const result = this.shikiHighlighter.highlight(
+          doc,
+          range.from,
+          range.to,
+          (from, to, mark) => {
+            if (to > from) marks.push(mark.range(from, to));
+          },
+          { deadline, deferSlowLines: true, speculative: true },
+        );
+        coveredTo =
+          result.nextFrom !== null && result.nextFrom < range.to
+            ? result.nextFrom
+            : range.to;
+        if (coveredTo < range.to || performance.now() >= deadline) break;
+      }
+    } catch (error) {
+      console.error('[@cmshiki/editor] speculative highlight failed:', error);
+      return false;
+    }
+    const coveredFrom = ranges[0].from;
+    if (coveredTo <= coveredFrom) return false;
+    this.decorations = this.decorations.update({
+      filterFrom: coveredFrom,
+      filterTo: coveredTo,
+      filter: (from, to) => to <= coveredFrom || from >= coveredTo,
+      add: marks,
+      sort: true,
+    });
+    return true;
   }
 
   /**
