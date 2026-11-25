@@ -7,8 +7,8 @@ catalog:
   "@codemirror/lang-javascript": 6.2.4
   "@codemirror/commands": 6.8.1
   "@codemirror/language": ^6.12.1
-  "@codemirror/state": ^6.5.3
-  "@codemirror/view": ^6.39.9
+  "@codemirror/state": ^6.7.6
+  "@codemirror/view": ^6.43.15
   "@iconify-json/carbon": 1.2.15
   "@shikijs/types": 4.0.2
   "@shikijs/langs": 4.0.2
@@ -43,5 +43,5 @@ catalog:
   vue-router: 4.6.4
   vue-tsc: 3.2.2
 overrides:
-  "@codemirror/state": 6.5.3
-  "@codemirror/view": 6.39.9
+  "@codemirror/state": 6.7.6
+  "@codemirror/view": 6.43.15
