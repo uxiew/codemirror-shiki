@@ -7,10 +7,10 @@
 ## 安装
 
 ```sh
-pnpm add @cmshiki/shiki @codemirror/state @codemirror/view shiki
+pnpm add @cmshiki/shiki @codemirror/state @codemirror/view shiki@^3
 ```
 
-npm 上的 `0.2.0` 需要 Shiki 3（`shiki@^3`）；本仓库源码和下一个版本使用 Shiki 4（`shiki@^4`）。请确保编辑器和扩展使用同一份 `@codemirror/view` 和 `@codemirror/state`。
+该命令对应 npm 上的 `0.2.0`（peer 为 `shiki@^3`）；本仓库源码已升级到 Shiki 4，下一个版本发布后改装 `shiki@^4`。请确保编辑器和扩展使用同一份 `@codemirror/view` 和 `@codemirror/state`。
 
 ## 最小用法
 
