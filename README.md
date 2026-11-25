@@ -1,52 +1,47 @@
 # codemirror-shiki
 
-[![zread](https://img.shields.io/badge/Ask_Zread-_.svg?style=flat&color=00b0aa&labelColor=000000&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTQuOTYxNTYgMS42MDAxSDIuMjQxNTZDMS44ODgxIDEuNjAwMSAxLjYwMTU2IDEuODg2NjQgMS42MDE1NiAyLjI0MDFWNC45NjAxQzEuNjAxNTYgNS4zMTM1NiAxLjg4ODEgNS42MDAxIDIuMjQxNTYgNS42MDAxSDQuOTYxNTZDNS4zMTUwMiA1LjYwMDEgNS42MDE1NiA1LjMxMzU2IDUuNjAxNTYgNC45NjAxVjIuMjQwMUM1LjYwMTU2IDEuODg2NjQgNS4zMTUwMiAxLjYwMDEgNC45NjE1NiAxLjYwMDFaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00Ljk2MTU2IDEwLjM5OTlIMi4yNDE1NkMxLjg4ODEgMTAuMzk5OSAxLjYwMTU2IDEwLjY4NjQgMS42MDE1NiAxMS4wMzk5VjEzLjc1OTlDMS42MDE1NiAxNC4xMTM0IDEuODg4MSAxNC4zOTk5IDIuMjQxNTYgMTQuMzk5OUg0Ljk2MTU2QzUuMzE1MDIgMTQuMzk5OSA1LjYwMTU2IDE0LjExMzQgNS42MDE1NiAxMy43NTk5VjExLjAzOTlDNS42MDE1NiAxMC42ODY0IDUuMzE1MDIgMTAuMzk5OSA0Ljk2MTU2IDEwLjM5OTlaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik0xMy43NTg0IDEuNjAwMUgxMS4wMzg0QzEwLjY4NSAxLjYwMDEgMTAuMzk4NCAxLjg4NjY0IDEwLjM5ODQgMi4yNDAxVjQuOTYwMUMxMC4zOTg0IDUuMzEzNTYgMTAuNjg1IDUuNjAwMSAxMS4wMzg0IDUuNjAwMUgxMy43NTg0QzE0LjExMTkgNS42MDAxIDE0LjM5ODQgNS4zMTM1NiAxNC4zOTg0IDQuOTYwMVYyLjI0MDFDMTQuMzk4NCAxLjg4NjY0IDE0LjExMTkgMS42MDAxIDEzLjc1ODQgMS42MDAxWiIgZmlsbD0iI2ZmZiIvPgo8cGF0aCBkPSJNNCAxMkwxMiA0TDQgMTJaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00IDEyTDEyIDQiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIxLjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4K&logoColor=ffffff)](https://zread.ai/uxiew/codemirror-shiki)
+在 CodeMirror 6 中使用 Shiki 的 TextMate 语法高亮。
 
-`codemirror-shiki` 把 Shiki 语法高亮能力稳定接入 CodeMirror，并提供更容易使用的封装。
+Shiki syntax highlighting for CodeMirror 6.
 
-codemirror-shiki stably integrates the syntax highlighting capabilities of Shiki into CodeMirror and provides a more user-friendly wrapper.
+[在线 Playground](https://uxiew.github.io/codemirror-shiki/)
 
-## 项目结构
+## 安装
 
-- `@cmshiki/shiki`：底层 CodeMirror 扩展，负责 Shiki 高亮、主题管理和运行时更新。
-- `@cmshiki/editor`：开箱即用编辑器封装，基于 `@cmshiki/shiki`。
-- `@cmshiki/utils`：样式挂载、主题转换等工具函数。
-- `playground`：可视化测试页面，用于联动验证 grammar / theme / engine。
-- `samples`：按 `samples/<grammar>.sample` 命名的测试代码样例，供 playground 自动加载。
+用 `@cmshiki/editor` 创建编辑器。如果已有 CodeMirror 编辑器，请用 [`@cmshiki/shiki`](packages/shiki/README.md) 扩展。
 
-这意味着你可以享受到：
-
-- CodeMirror 的编辑交互能力；
-- Shiki 的语义高亮精度和主题体系；
-- 按需选择“开箱即用”或“精细化性能控制”。
-
-补充：
-
-- `@cmshiki/shiki` 采用单入口设计：需要业务侧预创建 `highlighter` 并传入。
-- 默认开启 `versionGuard`，对不兼容的 shared highlighter 快速失败并给出明确错误提示。
-
-文档入口：
-
-- `@cmshiki/shiki`：`packages/shiki/README.md`
-- `@cmshiki/editor`：`packages/editor/README.md`
-
-推荐阅读顺序：
-
-1. 先看 `@cmshiki/shiki` 的“highlighter 预初始化 + 精细打包模板”
-2. 再看 `@cmshiki/editor` 的“ShikiEditor 接入模板”
-
-## 快速开始
-
-```bash
-pnpm install
-pnpm dev
+```sh
+pnpm add @cmshiki/editor @codemirror/state @codemirror/view shiki@3.21.0
 ```
 
-## 常用命令
+安装命令与 npm 上的 `0.2.0` 类型匹配；本仓库使用 Shiki 4。
 
-```bash
-pnpm dev
-pnpm build
-pnpm test
-pnpm -F playground build
+## 最小用法
+
+在浏览器入口中创建 highlighter，再把它交给编辑器：
+
+```ts
+import { ShikiEditor } from '@cmshiki/editor'
+import { createHighlighter } from 'shiki'
+
+const highlighter = await createHighlighter({
+  langs: ['javascript'],
+  themes: ['github-light'],
+})
+
+const editor = await ShikiEditor.create({
+  parent: document.body,
+  doc: 'const answer = 42',
+  highlighter,
+  lang: 'javascript',
+  themes: { light: 'github-light' },
+})
 ```
+
+- `lang` 选择语法；`themes` 将主题 key 映射到 Shiki 主题名。
+- `defaultColor` 选择初始主题 key；`changeTheme(key)` 在运行时切换。
+- 多个编辑器可以共用同一个 `highlighter`；卸载编辑器时调用 `editor.destroy()`。
+
+[编辑器选项](packages/editor/README.md) · [CodeMirror 扩展选项](packages/shiki/README.md) · [主题工具](packages/utils/README.md)
+
+在仓库根目录运行 `pnpm install` 和 `pnpm dev`，即可启动本地 Playground。
