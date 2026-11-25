@@ -38,6 +38,13 @@ const CACHE_ANCHOR_INTERVAL = 200;
  * the one-time hitch accepted per long line.
  */
 const LONG_LINE_HEAD_CHARS = 2000;
+/**
+ * A range starting more than this many lines past the trusted prefix gets a
+ * speculative pass first. Below it the exact walk is cheap enough to wait for.
+ */
+const SPECULATIVE_MIN_GAP = 200;
+/** How many lines above a range the speculative pass may start from. */
+const SPECULATIVE_LOOKBACK = 40;
 
 export interface CachePruneOptions {
   maxEntries?: number;
@@ -65,11 +72,21 @@ export interface HighlightBudgetOptions {
    * pass that follows gives such lines the full `tokenizeTimeLimit`.
    */
   deferSlowLines?: boolean;
+  /**
+   * Do not walk down from the trusted prefix; start a few lines above the
+   * range from a guessed grammar state instead, the way VS Code tokenizes a
+   * viewport it has not reached yet. Results are cached like any other line
+   * but never trusted: the exact walk reuses a line only if it arrives with
+   * the same start state, and replaces it otherwise.
+   */
+  speculative?: boolean;
 }
 
 export interface HighlightResult {
   produced: number;
   nextFrom: number | null;
+  /** Nothing was tokenized: the core, grammar or theme is not ready. */
+  skipped?: boolean;
 }
 
 /**
@@ -252,6 +269,11 @@ export class ShikiHighlighter extends Base {
     return this.freshLines > 0;
   }
 
+  /** Lines tokenized so far; lets callers tell whether a pass made progress. */
+  get tokenizedLines(): number {
+    return this.freshLines;
+  }
+
   setView(view: any) {
     if (view !== this.view) {
       // Classes are mounted on a view's root; a new view needs them mounted again.
@@ -387,6 +409,7 @@ export class ShikiHighlighter extends Base {
     state: GrammarState | null,
     grammar: any,
     budget: HighlightBudgetOptions,
+    trusted = true,
   ): LineCacheEntry | null {
     const cached = this.lineCache.get(line.number);
     const cachedMatches =
@@ -420,8 +443,51 @@ export class ShikiHighlighter extends Base {
       if (retry) return null;
       this.freshLines++;
     }
-    if (line.number === this.validUpTo + 1) this.validUpTo = line.number;
+    if (trusted && line.number === this.validUpTo + 1) {
+      this.validUpTo = line.number;
+    }
     return entry;
+  }
+
+  /**
+   * Whether an exact pass for the line at `pos` would first have to tokenize
+   * many lines above it, e.g. right after a jump or a scrollbar drag into a
+   * part of the document nothing has reached yet.
+   */
+  needsSpeculation(doc: Text, pos: number): boolean {
+    const trusted = this.cacheDoc === doc ? this.validUpTo : 0;
+    return doc.lineAt(pos).number - trusted > SPECULATIVE_MIN_GAP;
+  }
+
+  /**
+   * Starting point for a speculative pass: the end state of a cached line
+   * just above the range when one still matches its text, otherwise the
+   * initial state at the least indented line of the lookback window, which
+   * most likely begins a top-level construct.
+   */
+  private guessStartState(
+    doc: Text,
+    startLine: number,
+  ): { anchorLine: number; state: GrammarState | null } {
+    const floor = Math.max(1, startLine - SPECULATIVE_LOOKBACK);
+    for (let n = startLine - 1; n >= floor; n--) {
+      const cached = this.lineCache.get(n);
+      if (cached && cached.text === doc.line(n).text) {
+        return { anchorLine: n, state: cached.endState };
+      }
+    }
+    let best = floor;
+    let bestIndent = Infinity;
+    for (let n = floor; n < startLine; n++) {
+      const text = doc.line(n).text;
+      const indent = text.length - text.trimStart().length;
+      if (indent === text.length) continue;
+      if (indent <= bestIndent) {
+        bestIndent = indent;
+        best = n;
+      }
+    }
+    return { anchorLine: best - 1, state: null };
   }
 
   private pruneLineCache(centerLine: number) {
@@ -450,15 +516,16 @@ export class ShikiHighlighter extends Base {
   ): HighlightResult {
     let produced = 0;
     let nextFrom: number | null = null;
-    const { maxDecorations, deadline } = budgetOptions;
+    const { maxDecorations, deadline, speculative = false } = budgetOptions;
+    const trusted = !speculative;
 
     if (this.isCoreUpdating) {
-      return { produced, nextFrom };
+      return { produced, nextFrom, skipped: true };
     }
 
     if (!this.internal) {
       console.warn('highlight: internal not ready');
-      return { produced, nextFrom };
+      return { produced, nextFrom, skipped: true };
     }
 
     const langId = getPrimaryRuntimeLangId(this.configs.lang);
@@ -469,7 +536,7 @@ export class ShikiHighlighter extends Base {
       if (this.configs.warnings) {
         console.warn('highlight: lang is not configured');
       }
-      return { produced, nextFrom };
+      return { produced, nextFrom, skipped: true };
     }
 
     const validTheme = this.configs.themes[themeAlias];
@@ -479,7 +546,7 @@ export class ShikiHighlighter extends Base {
       console.warn(
         `highlight: theme '${themeAlias}' not found in themes config`,
       );
-      return { produced, nextFrom };
+      return { produced, nextFrom, skipped: true };
     }
 
     // Resolve theme name (handle string vs object)
@@ -505,7 +572,7 @@ export class ShikiHighlighter extends Base {
           error,
         );
       }
-      return { produced, nextFrom };
+      return { produced, nextFrom, skipped: true };
     }
     if (!grammar) {
       if (this.configs.warnings) {
@@ -513,7 +580,7 @@ export class ShikiHighlighter extends Base {
           `highlight: grammar not found for langId=${String(langId)}`,
         );
       }
-      return { produced, nextFrom };
+      return { produced, nextFrom, skipped: true };
     }
     const themeForeground =
       (internal as any).getTheme?.(finalThemeName)?.fg ||
@@ -533,11 +600,16 @@ export class ShikiHighlighter extends Base {
     const endLine = doc.lineAt(to).number;
 
     // 1. Starting state: the nearest cached line before the range that is
-    //    still trusted after any edits.
-    let anchorLine = Math.min(startLine - 1, this.validUpTo);
-    while (anchorLine >= 1 && !this.lineCache.has(anchorLine)) anchorLine--;
-    let state: GrammarState | null =
-      anchorLine >= 1 ? this.lineCache.get(anchorLine)!.endState : null;
+    //    still trusted after any edits, or a guess for a speculative pass.
+    let anchorLine: number;
+    let state: GrammarState | null;
+    if (speculative) {
+      ({ anchorLine, state } = this.guessStartState(doc, startLine));
+    } else {
+      anchorLine = Math.min(startLine - 1, this.validUpTo);
+      while (anchorLine >= 1 && !this.lineCache.has(anchorLine)) anchorLine--;
+      state = anchorLine >= 1 ? this.lineCache.get(anchorLine)!.endState : null;
+    }
 
     // The deadline is only honoured once at least one line was actually
     // tokenized, so every call makes progress and the caller cannot spin.
@@ -558,7 +630,13 @@ export class ShikiHighlighter extends Base {
           nextFrom = from;
           break work;
         }
-        const entry = this.resolveLine(doc.line(i), state, grammar, budgetOptions);
+        const entry = this.resolveLine(
+          doc.line(i),
+          state,
+          grammar,
+          budgetOptions,
+          trusted,
+        );
         if (entry === null) {
           nextFrom = from;
           break work;
@@ -578,7 +656,13 @@ export class ShikiHighlighter extends Base {
           break work;
         }
 
-        const entry = this.resolveLine(line, state, grammar, budgetOptions);
+        const entry = this.resolveLine(
+          line,
+          state,
+          grammar,
+          budgetOptions,
+          trusted,
+        );
         if (entry === null) {
           nextFrom = line.from;
           break work;

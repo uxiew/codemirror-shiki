@@ -9,6 +9,7 @@ import {
   RangeSet,
   RangeSetBuilder,
   StateEffect,
+  type Range,
   type Text,
 } from '@codemirror/state';
 
@@ -34,6 +35,16 @@ const RAPID_SCROLL_SETTLE_MS = 96;
 const COARSE_HIGHLIGHT_LINE_BUDGET = 240;
 /** How long one idle chunk may hold the main thread before yielding. */
 const CHUNK_TIME_BUDGET_MS = 12;
+/**
+ * Upper bound for an idle chunk when the browser reports a longer idle
+ * period, so catching up after a jump does not crawl at 12ms per frame.
+ */
+const MAX_IDLE_CHUNK_MS = 30;
+/**
+ * Budget for the speculative pass that styles a viewport the exact walk has
+ * not reached yet, so a jump or a scrollbar drag never shows plain text.
+ */
+const SPECULATIVE_BUDGET_MS = 8;
 /**
  * Budget for the pass that runs synchronously inside an editor update, so
  * typing and scrolling stay styled without a flash when the work is cheap.
@@ -160,15 +171,30 @@ export function trimRangesByLineBudget(
 }
 
 // Polyfill for requestIdleCallback
-const requestIdleCallback =
+const requestIdleCallback: (cb: (deadline?: IdleDeadline) => void) => number =
   typeof window !== 'undefined' && window.requestIdleCallback
     ? window.requestIdleCallback
-    : (cb: () => void) => setTimeout(cb, 1);
+    : (cb: () => void) => setTimeout(cb, 1) as unknown as number;
+
+function idleBudget(deadline?: IdleDeadline): number {
+  const remaining = deadline ? deadline.timeRemaining() : 0;
+  return Math.min(MAX_IDLE_CHUNK_MS, Math.max(CHUNK_TIME_BUDGET_MS, remaining));
+}
 
 const cancelIdleCallback =
   typeof window !== 'undefined' && window.cancelIdleCallback
     ? window.cancelIdleCallback
     : clearTimeout;
+
+const requestFrame: (cb: () => void) => number =
+  typeof window !== 'undefined' && window.requestAnimationFrame
+    ? (cb) => window.requestAnimationFrame(cb)
+    : (cb) => setTimeout(cb, 16) as unknown as number;
+
+const cancelFrame: (id: number) => void =
+  typeof window !== 'undefined' && window.cancelAnimationFrame
+    ? (id) => window.cancelAnimationFrame(id)
+    : (id) => clearTimeout(id);
 
 interface HighlightOptions {
   /** Only style a bounded number of lines; used while the user scrolls fast. */
@@ -188,8 +214,8 @@ class ShikiView {
     to: 0,
   };
   // Track pending async highlight to cancel if viewport changes again
-  private pendingHighlight: ReturnType<typeof requestIdleCallback> | null =
-    null;
+  /** Cancels the scheduled highlight chunk, idle or animation frame. */
+  private pendingHighlight: (() => void) | null = null;
   private pendingViewportSettle: ReturnType<typeof setTimeout> | null = null;
   private highlightRequestId = 0;
   private lastViewportChangeAt = 0;
@@ -248,7 +274,7 @@ class ShikiView {
 
   private cancelPendingHighlight() {
     if (this.pendingHighlight !== null) {
-      cancelIdleCallback(this.pendingHighlight as number);
+      this.pendingHighlight();
       this.pendingHighlight = null;
     }
   }
@@ -311,18 +337,22 @@ class ShikiView {
     const requestedRanges = ranges.map((r) => ({ ...r }));
     const pendingRanges = ranges.slice();
     const entries: DecorationEntry[] = [];
+    let mergedEntries = -1;
+
+    const isStale = (sync: boolean) =>
+      requestId !== this.highlightRequestId ||
+      (!sync &&
+        !isSameRanges(requestedRanges, normalizeVisibleRanges(view.visibleRanges)));
+
+    const scheduleExact = () => {
+      const id = requestIdleCallback((idle) => runChunk(idleBudget(idle), false));
+      this.pendingHighlight = () => cancelIdleCallback(id);
+    };
 
     const runChunk = (budgetMs: number, sync: boolean) => {
-      if (requestId !== this.highlightRequestId) {
-        this.pendingHighlight = null;
-        return;
-      }
-      if (
-        !sync &&
-        !isSameRanges(requestedRanges, normalizeVisibleRanges(view.visibleRanges))
-      ) {
+      if (isStale(sync)) {
         // Viewport moved on; its own update has scheduled a new highlight.
-        this.pendingHighlight = null;
+        if (requestId === this.highlightRequestId) this.pendingHighlight = null;
         return;
       }
 
@@ -364,26 +394,116 @@ class ShikiView {
       }
 
       if (requestId !== this.highlightRequestId) return;
-      this.decorations = this.mergeWithUnfinished(entries, pendingRanges, doc);
       this.pendingHighlight = null;
-
-      // Inside an update CodeMirror reads the new decorations itself.
-      if (!sync) view.dispatch({});
-
-      if (pendingRanges.length > 0) {
-        this.pendingHighlight = requestIdleCallback(() =>
-          runChunk(CHUNK_TIME_BUDGET_MS, false),
-        );
+      // A chunk that only walked towards the range has nothing new to show;
+      // skip the rebuild and the redraw it would cost.
+      if (entries.length !== mergedEntries || pendingRanges.length === 0) {
+        mergedEntries = entries.length;
+        this.decorations = this.mergeWithUnfinished(entries, pendingRanges, doc);
+        // Inside an update CodeMirror reads the new decorations itself.
+        if (!sync) view.dispatch({});
       }
+
+      if (pendingRanges.length > 0) scheduleExact();
     };
 
-    if (startSync) {
+    // Far past the trusted prefix: style the viewport from a guessed state
+    // first, one 8ms chunk per frame, then let the exact walk take over.
+    let speculativeFrom = ranges[0].from;
+    const runSpeculativeChunk = (sync: boolean) => {
+      if (isStale(sync)) {
+        if (requestId === this.highlightRequestId) this.pendingHighlight = null;
+        return;
+      }
+      this.pendingHighlight = null;
+
+      let next: number | null = null;
+      if (pendingRanges.length > 0) {
+        speculativeFrom = Math.max(speculativeFrom, pendingRanges[0].from);
+        if (this.shikiHighlighter.needsSpeculation(doc, speculativeFrom)) {
+          next = this.applySpeculative(doc, pendingRanges, speculativeFrom);
+        }
+      }
+      if (next !== null && next > speculativeFrom && !sync) view.dispatch({});
+
+      const rangesEnd = pendingRanges.length
+        ? pendingRanges[pendingRanges.length - 1].to
+        : 0;
+      if (next !== null && next < rangesEnd) {
+        speculativeFrom = next;
+        const id = requestFrame(() => runSpeculativeChunk(false));
+        this.pendingHighlight = () => cancelFrame(id);
+        return;
+      }
+      // Done, no progress, or the exact walk is close enough: hand over.
+      scheduleExact();
+    };
+
+    if (
+      this.shikiHighlighter.isWarm &&
+      this.shikiHighlighter.needsSpeculation(doc, ranges[0].from)
+    ) {
+      // `sync` and `coarse` both come from inside an editor update.
+      runSpeculativeChunk(!!options.sync || !!options.coarse);
+    } else if (startSync) {
       runChunk(SYNC_PASS_BUDGET_MS, true);
     } else {
-      this.pendingHighlight = requestIdleCallback(() =>
-        runChunk(CHUNK_TIME_BUDGET_MS, false),
-      );
+      scheduleExact();
     }
+  }
+
+  /**
+   * Style `ranges` from `from` onwards from a guessed grammar state, within
+   * `SPECULATIVE_BUDGET_MS`, replacing what that part showed before. Returns
+   * the position styled up to, or `null` when the pass made no progress or
+   * could not run, in which case the decorations are left alone.
+   */
+  private applySpeculative(
+    doc: Text,
+    ranges: readonly SimpleRange[],
+    from: number,
+  ): number | null {
+    const deadline = performance.now() + SPECULATIVE_BUDGET_MS;
+    const tokenizedBefore = this.shikiHighlighter.tokenizedLines;
+    const marks: Range<Decoration>[] = [];
+    let coveredTo = from;
+    try {
+      for (const range of ranges) {
+        if (range.to <= coveredTo) continue;
+        const start = Math.max(range.from, coveredTo);
+        const result = this.shikiHighlighter.highlight(
+          doc,
+          start,
+          range.to,
+          (markFrom, markTo, mark) => {
+            if (markTo > markFrom) marks.push(mark.range(markFrom, markTo));
+          },
+          { deadline, deferSlowLines: true, speculative: true },
+        );
+        if (result.skipped) return null;
+        coveredTo =
+          result.nextFrom !== null && result.nextFrom < range.to
+            ? result.nextFrom
+            : range.to;
+        if (coveredTo < range.to || performance.now() >= deadline) break;
+      }
+    } catch (error) {
+      console.error('[@cmshiki/editor] speculative highlight failed:', error);
+      return null;
+    }
+    if (coveredTo <= from) {
+      // The budget went into the lookback above the range. Those lines are
+      // cached now, so the next chunk starts from the last of them.
+      return this.shikiHighlighter.tokenizedLines > tokenizedBefore ? from : null;
+    }
+    this.decorations = this.decorations.update({
+      filterFrom: from,
+      filterTo: coveredTo,
+      filter: (decoFrom, decoTo) => decoTo <= from || decoFrom >= coveredTo,
+      add: marks,
+      sort: true,
+    });
+    return coveredTo;
   }
 
   /**

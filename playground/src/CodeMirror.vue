@@ -1,16 +1,19 @@
 <template>
-  <div id="cm-editor" ref="editorView"></div>
+  <div class="editor-host">
+    <p v-if="loadError" role="alert" class="p-4 text-sm text-gray-300">{{ loadError }}</p>
+    <p v-else-if="!editorInstance" role="status" class="p-4 text-sm text-gray-300">Loading highlighter…</p>
+    <div class="editor-host" ref="editorView"></div>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { EditorState } from "@codemirror/state";
+import { EditorState, type Extension } from "@codemirror/state";
 import {
   highlightSpecialChars,
   drawSelection,
   keymap,
   lineNumbers,
   highlightActiveLine,
-  type EditorViewConfig,
 } from "@codemirror/view";
 import { EditorView } from "@codemirror/view";
 import { minimalSetup } from "codemirror";
@@ -19,10 +22,11 @@ import {
   indentWithTab,
   historyKeymap,
 } from "@codemirror/commands";
-import { injections, grammars } from "tm-grammars";
+import { bundledLanguagesInfo } from "shiki/langs";
+import { bundledThemesInfo } from "shiki/themes";
 import { ShikiEditor } from "@cmshiki/editor";
 import { shikiToCodeMirror } from "@cmshiki/shiki";
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { type CMProps } from "./types";
 import { createHighlighterCore, type HighlighterCore } from "shiki/core";
 import { createOnigurumaEngine } from "shiki/engine/oniguruma";
@@ -31,14 +35,16 @@ import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 const props = defineProps<CMProps>();
 
 const editorView = ref<HTMLDivElement>();
-const editorInstance = ref<ShikiEditor | EditorView>();
+const editorInstance = shallowRef<ShikiEditor | EditorView>();
+const loadError = ref("");
+let activeHighlighter: HighlighterCore | undefined;
 let runId = 0;
 
 const emit = defineEmits<{
   perf: [number];
 }>();
 
-function createSharedExtensions(): NonNullable<EditorViewConfig["extensions"]> {
+function createSharedExtensions(): Extension[] {
   return [
     minimalSetup,
     keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
@@ -62,8 +68,6 @@ watch(
     props.readonly,
   ],
   async (nextValues, prevValues) => {
-    if (!editorInstance.value || !prevValues) return;
-
     if (
       nextValues[1] !== prevValues[1] ||
       nextValues[2] !== prevValues[2] ||
@@ -75,6 +79,7 @@ watch(
       return;
     }
 
+    if (!editorInstance.value) return;
     const start = performance.now();
     syncDocument(nextValues[0] as string);
     await nextTick();
@@ -82,59 +87,18 @@ watch(
   },
 );
 
-/**
- * 按当前语言名递归加载主语法及其内嵌语法。
- */
-async function loadLanguageBundle(name: string) {
-  const langMap = new Map<string, Promise<unknown>>();
-
-  const load = (langName: string) => {
-    if (langMap.has(langName)) return langMap.get(langName)!;
-
-    const info =
-      grammars.find((item) => item.name === langName) ||
-      injections.find((item) => item.name === langName);
-
-    const promise = import(
-      `../node_modules/tm-grammars/grammars/${langName}.json`
-    ).then((module) => module.default);
-
-    langMap.set(langName, promise);
-    info?.embedded?.forEach(load);
-    return promise;
-  };
-
-  load(name);
-  return Promise.all(Array.from(langMap.values()));
-}
-
-/**
- * 加载当前选中的 TextMate 主题对象。
- */
-async function loadThemeInput(name: string) {
-  return import(`../node_modules/tm-themes/themes/${name}.json`).then(
-    (module) => module.default,
-  );
-}
-
-/**
- * 根据 playground 当前配置创建 Shiki highlighter。
- */
-async function createPlaygroundHighlighter(): Promise<HighlighterCore> {
-  const [langs, theme] = await Promise.all([
-    loadLanguageBundle(props.lang.name),
-    loadThemeInput(props.theme.name),
-  ]);
-
-  const engine =
-    props.engine === "javascript"
-      ? createJavaScriptRegexEngine()
-      : createOnigurumaEngine(() => import("shiki/wasm"));
+function createPlaygroundHighlighter(lang: string, theme: string) {
+  const language = bundledLanguagesInfo.find(({ id }) => id === lang);
+  const themeInfo = bundledThemesInfo.find(({ id }) => id === theme);
+  if (!language || !themeInfo) throw new Error("Unknown language or theme");
 
   return createHighlighterCore({
-    langs,
-    themes: [theme],
-    engine,
+    langs: [language.import()],
+    themes: [themeInfo.import()],
+    engine:
+      props.engine === "javascript"
+        ? createJavaScriptRegexEngine()
+        : createOnigurumaEngine(() => import("shiki/wasm")),
   });
 }
 
@@ -144,15 +108,15 @@ async function createPlaygroundHighlighter(): Promise<HighlighterCore> {
 function syncDocument(doc: string) {
   if (!editorInstance.value) return;
 
-  if (props.mode === "editor") {
-    const editor = editorInstance.value as ShikiEditor;
+  if (editorInstance.value instanceof ShikiEditor) {
+    const editor = editorInstance.value;
     if (editor.getDoc() !== doc) {
       editor.setDoc(doc);
     }
     return;
   }
 
-  const view = editorInstance.value as EditorView;
+  const view = editorInstance.value;
   const current = view.state.doc.toString();
   if (current === doc) return;
 
@@ -165,70 +129,78 @@ function syncDocument(doc: string) {
   });
 }
 
-/**
- * 重新创建当前 playground 使用的编辑器实例。
- */
+function disposeEditor() {
+  editorInstance.value?.destroy();
+  editorInstance.value = undefined;
+  activeHighlighter?.dispose();
+  activeHighlighter = undefined;
+}
+
 async function run() {
   const currentRunId = ++runId;
-  const previousInstance = editorInstance.value;
-  editorInstance.value = undefined;
-  previousInstance?.destroy();
-
-  if (!editorView.value) return;
+  const parent = editorView.value;
+  const lang = props.lang.name;
+  const theme = props.theme.name;
+  loadError.value = "";
+  disposeEditor();
+  if (!parent) return;
 
   const start = performance.now();
-  const highlighter = await createPlaygroundHighlighter();
+  let highlighter: HighlighterCore | undefined;
+  try {
+    highlighter = await createPlaygroundHighlighter(lang, theme);
+    if (currentRunId !== runId) return;
 
-  if (currentRunId !== runId) {
-    return;
-  }
+    let nextInstance: ShikiEditor | EditorView;
+    const sharedExtensions = createSharedExtensions();
 
-  let nextInstance: ShikiEditor | EditorView | undefined;
-  const sharedExtensions = createSharedExtensions();
+    if (props.mode === "editor") {
+      nextInstance = await ShikiEditor.create({
+        highlighter,
+        lang,
+        themes: { light: theme },
+        defaultColor: "light",
+        themeStyle: "cm",
+        cssVariablePrefix: "--cm-",
+        doc: props.lang.value,
+        parent,
+        extensions: sharedExtensions,
+      });
+    } else {
+      const { shiki } = await shikiToCodeMirror({
+        highlighter,
+        lang,
+        theme,
+        themeStyle: "cm",
+        defaultColor: "light",
+      });
+      if (currentRunId !== runId) return;
 
-  if (props.mode === "editor") {
-    nextInstance = await ShikiEditor.create({
-      highlighter,
-      lang: props.lang.name,
-      themes: {
-        light: props.theme.name,
-      },
-      defaultColor: "light",
-      themeStyle: "cm",
-      cssVariablePrefix: "--cm-",
-      doc: props.lang.value,
-      parent: editorView.value,
-      extensions: sharedExtensions,
-    });
-  } else {
-    const { shiki } = await shikiToCodeMirror({
-      highlighter,
-      lang: props.lang.name,
-      theme: props.theme.name,
-      themeStyle: "cm",
-      defaultColor: "light",
-    });
+      nextInstance = new EditorView({
+        doc: props.lang.value,
+        parent,
+        extensions: [...sharedExtensions, shiki],
+      });
+    }
 
     if (currentRunId !== runId) {
+      nextInstance.destroy();
       return;
     }
 
-    nextInstance = new EditorView({
-      doc: props.lang.value,
-      parent: editorView.value,
-      extensions: [...sharedExtensions, shiki],
-    });
+    editorInstance.value = nextInstance;
+    activeHighlighter = highlighter;
+    highlighter = undefined;
+    syncDocument(props.lang.value);
+    await nextTick();
+    if (currentRunId === runId) emit("perf", performance.now() - start);
+  } catch (error) {
+    if (currentRunId !== runId) return;
+    loadError.value = `Could not highlight ${lang} with ${theme}.`;
+    console.error(loadError.value, error);
+  } finally {
+    highlighter?.dispose();
   }
-
-  if (currentRunId !== runId) {
-    nextInstance?.destroy();
-    return;
-  }
-
-  editorInstance.value = nextInstance;
-
-  await nextTick();
-  emit("perf", performance.now() - start);
 }
 
 onMounted(() => {
@@ -237,7 +209,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   runId += 1;
-  editorInstance.value?.destroy();
+  disposeEditor();
 });
 
 if (import.meta.hot) {
@@ -248,7 +220,7 @@ if (import.meta.hot) {
 </script>
 
 <style scoped>
-#cm-editor {
+.editor-host {
   height: 100%;
   overflow: hidden;
   background-color: transparent;

@@ -34,14 +34,14 @@
           >
         </h1>
         <p class="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-4">
-          配置与实时预览 Playground
+          TextMate grammar and theme playground
         </p>
 
         <!-- 基础配置面板 -->
         <div class="space-y-4">
           <!-- 运行时模式 -->
           <div>
-            <div class="text-xs font-semibold mb-1.5 opacity-80">当前模式</div>
+            <div class="text-xs font-semibold mb-1.5 opacity-80">Integration</div>
             <div
               class="flex rounded overflow-hidden shadow-sm border border-gray-300 dark:border-gray-600 text-xs font-medium"
             >
@@ -71,7 +71,7 @@
           </div>
           <!-- RegExp 引擎 -->
           <div>
-            <div class="text-xs font-semibold mb-1.5 opacity-80">正则引擎</div>
+            <div class="text-xs font-semibold mb-1.5 opacity-80">Regex engine</div>
             <div
               class="flex rounded overflow-hidden shadow-sm border border-gray-300 dark:border-gray-600 text-xs font-medium"
             >
@@ -103,7 +103,7 @@
           <div
             class="flex items-center justify-between text-xs bg-gray-50 dark:bg-gray-900 rounded p-2.5 border border-gray-200 dark:border-gray-700 shadow-inner"
           >
-            <span class="opacity-70 font-medium">渲染耗时</span>
+            <span class="opacity-70 font-medium">Render time</span>
             <span class="font-mono font-bold" :class="getPerfColor(perfMs)"
               >{{ perfMs.toFixed(2) }} ms</span
             >
@@ -116,14 +116,18 @@
         class="flex-auto flex flex-row md:flex-col overflow-hidden divide-x md:divide-x-0 md:divide-y divide-gray-200 dark:divide-gray-700"
       >
         <!-- Grammar -->
-        <section class="flex-1 min-h-0 flex flex-col md:h-1/2">
+        <section class="flex-1 min-h-0 flex flex-col md:h-1/2" aria-labelledby="language-label">
           <div
             class="p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50"
           >
+            <label id="language-label" for="language-search" class="mb-1 flex justify-between px-1 text-xs font-semibold">
+              Language <span class="font-normal opacity-70">{{ languages.length }}</span>
+            </label>
             <input
+              id="language-search"
               v-model="searchGrammar"
-              type="text"
-              placeholder="搜索语法..."
+              type="search"
+              placeholder="Filter languages…"
               class="w-full text-xs px-2.5 py-1.5 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder-gray-400"
             />
           </div>
@@ -132,29 +136,35 @@
           >
             <button
               v-for="g in filteredGrammars"
-              :key="g.name"
+              :key="g.id"
+              :aria-pressed="g.id === grammar"
               class="w-full px-3 py-2 text-left text-xs border-b border-gray-100 dark:border-gray-800/50 truncate transition-colors"
               :class="
-                g.name === grammar
+                g.id === grammar
                   ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 font-semibold border-l-2 border-l-blue-500'
                   : 'hover:bg-gray-50 dark:hover:bg-gray-800 border-l-2 border-l-transparent text-gray-700 dark:text-gray-300'
               "
-              @click="selectGrammar(g.name)"
+              @click="grammar = g.id"
             >
-              {{ g.displayName }}
+              {{ g.name }}
             </button>
+            <p v-if="!filteredGrammars.length" class="px-3 py-2 text-xs opacity-70">No matching languages</p>
           </div>
         </section>
 
         <!-- Theme -->
-        <section class="flex-1 min-h-0 flex flex-col md:h-1/2">
+        <section class="flex-1 min-h-0 flex flex-col md:h-1/2" aria-labelledby="theme-label">
           <div
             class="p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50"
           >
+            <label id="theme-label" for="theme-search" class="mb-1 flex justify-between px-1 text-xs font-semibold">
+              Theme <span class="font-normal opacity-70">{{ themes.length }}</span>
+            </label>
             <input
+              id="theme-search"
               v-model="searchTheme"
-              type="text"
-              placeholder="搜索主题..."
+              type="search"
+              placeholder="Filter themes…"
               class="w-full text-xs px-2.5 py-1.5 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 focus:outline-none focus:ring-1 focus:ring-purple-500 placeholder-gray-400"
             />
           </div>
@@ -163,17 +173,19 @@
           >
             <button
               v-for="t in filteredThemes"
-              :key="t.name"
+              :key="t.id"
+              :aria-pressed="t.id === theme"
               class="w-full px-3 py-2 text-left text-xs border-b border-gray-100 dark:border-gray-800/50 truncate transition-colors"
               :class="
-                t.name === theme
+                t.id === theme
                   ? 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 font-semibold border-l-2 border-l-purple-500'
                   : 'hover:bg-gray-50 dark:hover:bg-gray-800 border-l-2 border-l-transparent text-gray-700 dark:text-gray-300'
               "
-              @click="selectTheme(t.name)"
+              @click="theme = t.id"
             >
               {{ t.displayName }}
             </button>
+            <p v-if="!filteredThemes.length" class="px-3 py-2 text-xs opacity-70">No matching themes</p>
           </div>
         </section>
       </div>
@@ -185,14 +197,18 @@
     >
       <!-- 实际编辑器展示区 -->
       <section
-        class="flex-[3] min-h-0 relative border-b border-gray-800 flex flex-col group"
+        class="flex-[3] min-h-0 relative border-b border-gray-800 flex flex-col"
       >
-        <div
-          class="absolute right-3 top-3 z-10 px-2 py-1 text-[10px] font-semibold tracking-wider uppercase bg-gray-800/80 text-gray-300 rounded shadow backdrop-blur transition-opacity opacity-50 group-hover:opacity-100 pointer-events-none"
-        >
-          Live Editor
+        <div class="flex items-center justify-between gap-4 border-b border-gray-700 bg-[#21262d] px-3 py-2.5 text-xs text-gray-300">
+          <h2 class="font-semibold">Language sample</h2>
+          <p class="truncate">{{ selectedLanguageName }} · {{ currentThemeDisplayName }}</p>
         </div>
-        <CodeMirror class="flex-auto" v-bind="cmProps" @perf="onPerf" />
+        <p v-if="sampleStatus !== 'ready'" role="status" class="p-4 text-sm text-gray-300">
+          {{ sampleStatus === "loading" ? "Loading sample…" : "Could not load the sample." }}
+        </p>
+        <div v-show="sampleStatus === 'ready'" class="flex-1 min-h-0">
+          <CodeMirror v-if="cmProps.lang.value" v-bind="cmProps" @perf="onPerf" />
+        </div>
       </section>
 
       <!-- 配置代码展示区 -->
@@ -210,7 +226,7 @@
             class="rounded border border-gray-600 px-2 py-1 text-[11px] font-medium text-gray-200 transition-colors hover:border-gray-400 hover:bg-gray-700/60"
             @click="copyCurrentCode"
           >
-            {{ isCodeCopied ? "已复制" : "复制示例" }}
+            {{ isCodeCopied ? "Copied" : "Copy setup" }}
           </button>
         </div>
         <div
@@ -224,7 +240,7 @@
             {{ item.label }}: {{ item.value }}
           </span>
           <span class="text-gray-400">
-            切换引擎时建议重建 highlighter，而不是运行时热切换。
+            Recreate the highlighter when switching engines.
           </span>
         </div>
         <div class="flex-auto min-h-0 relative">
@@ -236,18 +252,20 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, reactive, onMounted } from "vue";
-import { grammars } from "tm-grammars";
-import { themes } from "tm-themes";
+import { computed, ref, reactive, watch } from "vue";
+import { bundledLanguagesInfo as languages } from "shiki/langs";
+import { bundledThemesInfo as themes } from "shiki/themes";
 import { useStorage } from "@vueuse/core";
 import type { CMProps } from "./types";
 import CodeMirror from "./CodeMirror.vue";
+import { loadSample } from "./samples";
 
 type EngineMode = CMProps["engine"];
 type AppMode = CMProps["mode"];
 const DEFAULT_GRAMMAR = "javascript";
+const DEFAULT_THEME = "github-light";
 
-const theme = useStorage("tm-theme", "github-light");
+const theme = useStorage("tm-theme", DEFAULT_THEME);
 const grammar = useStorage("tm-grammar", DEFAULT_GRAMMAR);
 const engine = useStorage<EngineMode>("tm-engine", "oniguruma");
 const appMode = useStorage<AppMode>("tm-mode", "editor");
@@ -256,6 +274,14 @@ const searchGrammar = ref("");
 const searchTheme = ref("");
 const perfMs = ref(0);
 const isCodeCopied = ref(false);
+const sampleStatus = ref<"loading" | "ready" | "error">("loading");
+
+if (!languages.some(({ id }) => id === grammar.value)) {
+  grammar.value = DEFAULT_GRAMMAR;
+}
+if (!themes.some(({ id }) => id === theme.value)) {
+  theme.value = DEFAULT_THEME;
+}
 
 const cmProps = reactive<CMProps>({
   lang: {
@@ -273,29 +299,37 @@ const cmProps = reactive<CMProps>({
 
 const filteredGrammars = computed(() => {
   const keyword = searchGrammar.value.trim().toLowerCase();
-  return grammars.filter((g) => g.displayName.toLowerCase().includes(keyword));
+  return languages.filter(({ id, name, aliases }) =>
+    [id, name, ...(aliases ?? [])].some((value) =>
+      value.toLowerCase().includes(keyword),
+    ),
+  );
 });
 
 const filteredThemes = computed(() => {
   const keyword = searchTheme.value.trim().toLowerCase();
-  return themes.filter((t) => t.displayName.toLowerCase().includes(keyword));
+  return themes.filter(({ id, displayName }) =>
+    [id, displayName].some((value) => value.toLowerCase().includes(keyword)),
+  );
 });
 
 const currentCodeTitle = computed(() => {
-  if (cmProps.mode === "shiki") return "使用 @cmshiki/shiki 的底层使用方式";
-  return "使用 @cmshiki/editor 的开箱即用方式";
+  if (cmProps.mode === "shiki") return "Setup with @cmshiki/shiki";
+  return "Setup with @cmshiki/editor";
 });
 
 const currentGrammarDisplayName = computed(
   () =>
-    grammars.find((item) => item.name === cmProps.lang.name)?.displayName ||
+    languages.find(({ id }) => id === cmProps.lang.name)?.name ||
     cmProps.lang.name,
 );
 
+const selectedLanguageName = computed(
+  () => languages.find(({ id }) => id === grammar.value)?.name || grammar.value,
+);
+
 const currentThemeDisplayName = computed(
-  () =>
-    themes.find((item) => item.name === cmProps.theme.name)?.displayName ||
-    cmProps.theme.name,
+  () => themes.find(({ id }) => id === theme.value)?.displayName || theme.value,
 );
 
 const currentEngineFactory = computed(() =>
@@ -305,10 +339,10 @@ const currentEngineFactory = computed(() =>
 );
 
 const currentCodeMeta = computed(() => [
-  { label: "模式", value: cmProps.mode === "editor" ? "ShikiEditor" : "shiki" },
-  { label: "语法", value: currentGrammarDisplayName.value },
-  { label: "主题", value: currentThemeDisplayName.value },
-  { label: "引擎", value: cmProps.engine },
+  { label: "Integration", value: cmProps.mode === "editor" ? "ShikiEditor" : "shiki" },
+  { label: "Language", value: currentGrammarDisplayName.value },
+  { label: "Theme", value: currentThemeDisplayName.value },
+  { label: "Engine", value: cmProps.engine },
 ]);
 
 const currentCodeDisplay = computed(() => {
@@ -389,31 +423,29 @@ const configCmProps = computed<CMProps>(() => ({
   readonly: true,
 }));
 
-async function loadSample(name: string) {
-  cmProps.lang.value = await import(`../../samples/${name}.sample?raw`)
-    .then((m) => m.default)
-    .catch(async () => {
-      if (name !== DEFAULT_GRAMMAR) {
-        return import(`../../samples/${DEFAULT_GRAMMAR}.sample?raw`)
-          .then((m) => m.default)
-          .catch(() => `// No sample available for ${DEFAULT_GRAMMAR}`);
-      }
-      return `// No sample available for ${name}`;
+watch(
+  grammar,
+  async (name, _, onCleanup) => {
+    let stale = false;
+    onCleanup(() => {
+      stale = true;
     });
-}
+    sampleStatus.value = "loading";
+    try {
+      const value = await loadSample(name);
+      if (stale) return;
+      cmProps.lang = { name, value, grammar: name };
+      sampleStatus.value = "ready";
+    } catch {
+      if (!stale) sampleStatus.value = "error";
+    }
+  },
+  { immediate: true },
+);
 
-function selectGrammar(name: string) {
-  grammar.value = name;
-  cmProps.lang.name = name;
-  cmProps.lang.grammar = name;
-  loadSample(name);
-}
-
-function selectTheme(name: string) {
-  theme.value = name;
-  cmProps.theme.name = name;
-  cmProps.theme.value = name;
-}
+watch(theme, (name) => {
+  cmProps.theme = { name, value: name };
+});
 
 function setEngine(mode: EngineMode) {
   engine.value = mode;
@@ -446,14 +478,6 @@ function getPerfColor(time: number) {
   if (time < 150) return "text-amber-600 dark:text-amber-400";
   return "text-red-500 dark:text-red-400";
 }
-
-onMounted(() => {
-  if (!grammar.value || !grammars.some((g) => g.name === grammar.value)) {
-    selectGrammar(DEFAULT_GRAMMAR);
-    return;
-  }
-  selectGrammar(grammar.value);
-});
 </script>
 
 <style>
