@@ -171,14 +171,13 @@ importers:
         version: 4.0.2
 
   packages/utils:
-    dependencies:
+    devDependencies:
       '@codemirror/state':
         specifier: 6.5.3
         version: 6.5.3
       '@codemirror/view':
         specifier: 6.39.9
         version: 6.39.9
-    devDependencies:
       style-mod:
         specifier: 'catalog:'
         version: 4.1.3

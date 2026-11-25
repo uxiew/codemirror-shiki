@@ -36,11 +36,13 @@
     "build": "tsdown",
     "prepublishOnly": "pnpm build"
   },
-  "dependencies": {
-    "@codemirror/state": "catalog:",
-    "@codemirror/view": "catalog:"
+  "peerDependencies": {
+    "@codemirror/state": "^6.0.0",
+    "@codemirror/view": "^6.0.0"
   },
   "devDependencies": {
+    "@codemirror/state": "catalog:",
+    "@codemirror/view": "catalog:",
     "style-mod": "catalog:"
   }
 }
