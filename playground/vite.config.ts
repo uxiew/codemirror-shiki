@@ -13,6 +13,7 @@ import { VueRouterAutoImports } from 'unplugin-vue-router';
 export default defineConfig({
   base: './',
   resolve: {
+    dedupe: ['@codemirror/state', '@codemirror/view'],
     alias: {
       '~/': `${path.resolve(__dirname, 'src')}/`,
       '@cmshiki/editor': path.resolve(
@@ -32,6 +33,14 @@ export default defineConfig({
   optimizeDeps: {
     // exclude: ['tm-grammars', 'tm-themes'],
     exclude: ['shiki'],
+    // Pre-bundle every CodeMirror entry up front so a late discovery never
+    // splits @codemirror/state into two instances.
+    include: [
+      'codemirror',
+      '@codemirror/state',
+      '@codemirror/view',
+      '@codemirror/commands',
+    ],
   },
   plugins: [
     VueMacros({
