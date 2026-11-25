@@ -85,6 +85,8 @@ export interface HighlightBudgetOptions {
 export interface HighlightResult {
   produced: number;
   nextFrom: number | null;
+  /** Nothing was tokenized: the core, grammar or theme is not ready. */
+  skipped?: boolean;
 }
 
 /**
@@ -265,6 +267,11 @@ export class ShikiHighlighter extends Base {
    */
   get isWarm(): boolean {
     return this.freshLines > 0;
+  }
+
+  /** Lines tokenized so far; lets callers tell whether a pass made progress. */
+  get tokenizedLines(): number {
+    return this.freshLines;
   }
 
   setView(view: any) {
@@ -513,12 +520,12 @@ export class ShikiHighlighter extends Base {
     const trusted = !speculative;
 
     if (this.isCoreUpdating) {
-      return { produced, nextFrom };
+      return { produced, nextFrom, skipped: true };
     }
 
     if (!this.internal) {
       console.warn('highlight: internal not ready');
-      return { produced, nextFrom };
+      return { produced, nextFrom, skipped: true };
     }
 
     const langId = getPrimaryRuntimeLangId(this.configs.lang);
@@ -529,7 +536,7 @@ export class ShikiHighlighter extends Base {
       if (this.configs.warnings) {
         console.warn('highlight: lang is not configured');
       }
-      return { produced, nextFrom };
+      return { produced, nextFrom, skipped: true };
     }
 
     const validTheme = this.configs.themes[themeAlias];
@@ -539,7 +546,7 @@ export class ShikiHighlighter extends Base {
       console.warn(
         `highlight: theme '${themeAlias}' not found in themes config`,
       );
-      return { produced, nextFrom };
+      return { produced, nextFrom, skipped: true };
     }
 
     // Resolve theme name (handle string vs object)
@@ -565,7 +572,7 @@ export class ShikiHighlighter extends Base {
           error,
         );
       }
-      return { produced, nextFrom };
+      return { produced, nextFrom, skipped: true };
     }
     if (!grammar) {
       if (this.configs.warnings) {
@@ -573,7 +580,7 @@ export class ShikiHighlighter extends Base {
           `highlight: grammar not found for langId=${String(langId)}`,
         );
       }
-      return { produced, nextFrom };
+      return { produced, nextFrom, skipped: true };
     }
     const themeForeground =
       (internal as any).getTheme?.(finalThemeName)?.fg ||
