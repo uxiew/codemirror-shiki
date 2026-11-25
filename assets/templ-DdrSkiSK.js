@@ -1,0 +1,12 @@
+const t=`package main
+
+templ body() {
+  <script type="text/javascript">
+    function handleClick(event) {
+      alert(event + ' clicked');
+    }
+  <\/script>
+  <button onclick="handleClick(this)">Click me</button>
+}
+
+// From https://templ.guide/syntax-and-usage/script-templates`;export{t as default};

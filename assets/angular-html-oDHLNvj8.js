@@ -1,0 +1,19 @@
+const e=`<h2>Hero List</h2>
+
+<p><em>Select a hero from the list to see details.</em></p>
+
+@if (heroes.length > 0) {
+  <ul>
+    <li *ngFor="let hero of heroes">
+      @let isSelected = hero === selectedHero;
+      <button type="button" (click)="selectHero(hero)" [class.selected]="isSelected">
+        {{hero.name}}
+      </button>
+    </li>
+  </ul>
+}
+
+<app-hero-detail *ngIf="selectedHero" [hero]="selectedHero"></app-hero-detail>
+
+<!-- from https://angular.io/guide/architecture-components -->
+`;export{e as default};

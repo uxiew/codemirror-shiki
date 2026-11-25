@@ -1,0 +1,14 @@
+const E=`# This is a super secret env var
+MY_SECRET="superSecret"
+MY_EXTENDED_SECRET=\${MY_SECRET}
+MY_NOT_EXTENDED_SECRET=$MY_SECRET
+MY_STRING_WITHOUT_QUOTES=helloWorld
+MY_NUMER=1
+
+EMPTY=
+
+IS_BOOLEAN=true
+IS_PYTHON_BOOLEAN=True
+
+COMMENT_INLINE= # kinda cool
+`;export{E as default};

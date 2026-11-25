@@ -1,0 +1,8 @@
+const n=`# this is a comment
+
+* @antfu @OrbisK
+
+# group vue with 2 required approvals
+[Vue] [2] @OrbisK @antfu
+*.vue
+`;export{n as default};

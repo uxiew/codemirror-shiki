@@ -1,0 +1,30 @@
+const n=`import { ref, computed } from 'vue'
+
+function ChildComp(props: {
+  foo: string
+  bar?: boolean
+}) {
+  const count = ref(0)
+  const double = computed(() => count * 2)
+
+  return vine\`
+    <div class="child-comp">
+      <h3> {{ foo }} </h3>
+      <p> Count = {{ count }} </p>
+      <p v-show="bar"> Double = {{ double }} </p>
+    </div>
+  \`
+}
+
+export function App() {
+  const msg = ref('')
+
+  return vine\`
+    <div class="app">
+      <ChildComp foo="hello world" bar />
+      <input v-model="msg" type="text" />
+      <p> Message: {{ msg }} </p>
+    </div>
+  \`
+}
+`;export{n as default};

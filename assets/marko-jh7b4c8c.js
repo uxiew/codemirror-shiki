@@ -1,0 +1,14 @@
+const e=`<await(slowPromise) timeout=5000>
+  <@then>Done</@then>
+  <@catch|err|>
+    <if(err.name === "TimeoutError")>
+      Took too long to fetch the data!
+    </if>
+    <else>
+      Promise failed with \${err.message}.
+    </else>
+  </@catch>
+</await>
+
+<!-- from https://markojs.com/docs/core-tags/ -->
+`;export{e as default};
