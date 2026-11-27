@@ -260,7 +260,7 @@ export function exposeTokenizer(
           tokens: result.tokens,
           posted: false,
           seq: 0,
-          redrop: false,
+          redrop: !!entry && (entry.posted || entry.redrop),
         };
         session.cache.set(n, entry);
       }

@@ -90,3 +90,21 @@ describe('tokenizer worker vs main thread', () => {
     }
   }, 120000);
 });
+
+describe('tokenizer worker: stale tokens', () => {
+  it('drops stale exact tokens when a line stops needing the worker', async () => {
+    const errors: any[] = [];
+    const doc = ['x', 'a=' + '1+'.repeat(150) + '1; /*', 'foo */ bar', 'baz'].join('\n');
+    const w = await editor(doc, true, errors);
+    const m = await editor(doc, false, errors);
+    w.plugin.updateHighlight(w.view); m.plugin.updateHighlight(m.view);
+    await waitFor(settledW(w.plugin)); await waitFor(settledM(m.plugin));
+    expect(toks(w.view, w.plugin)).toEqual(toks(m.view, m.plugin));
+    const spec = { changes: { from: 0, to: 1, insert: '`' } };
+    w.view.dispatch(spec); m.view.dispatch(spec);
+    await waitFor(settledW(w.plugin)); await waitFor(settledM(m.plugin));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(toks(w.view, w.plugin)).toEqual(toks(m.view, m.plugin));
+    expect(errors).toEqual([]);
+  });
+});
