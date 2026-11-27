@@ -1,0 +1,13 @@
+const t=`const feed = xml\`
+  <?xml version="1.0" encoding="UTF-8"?>
+  <feed xmlns="http://www.w3.org/2005/Atom">
+    <title>语法实验室</title>
+    <link href="https://shiki.style" />
+    <entry id="textmate">
+      <title>嵌入式语法高亮</title>
+      <summary><![CDATA[在模板字符串中编写 XML]]></summary>
+      <category term="syntax-highlighting" />
+    </entry>
+  </feed>
+\`;
+`;export{t as default};

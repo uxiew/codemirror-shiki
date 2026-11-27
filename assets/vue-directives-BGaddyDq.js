@@ -1,0 +1,24 @@
+const e=`<script setup lang="ts">
+import { ref } from 'vue';
+
+const search = ref('');
+const projects = ref([
+  { id: 1, name: '语法实验室', featured: true },
+  { id: 2, name: '主题画廊', featured: false },
+]);
+<\/script>
+
+<template>
+  <section class="projects">
+    <input v-model="search" placeholder="搜索项目…" />
+    <ul v-if="projects.length">
+      <li v-for="project in projects" :key="project.id">
+        <a :class="{ featured: project.featured }" @click.prevent="search = project.name">
+          {{ project.name }}
+        </a>
+      </li>
+    </ul>
+    <p v-else>还没有项目</p>
+  </section>
+</template>
+`;export{e as default};

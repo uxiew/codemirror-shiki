@@ -1,0 +1,15 @@
+const n=`const userId = 42;
+
+const query = sql\`
+  SELECT
+    users.name,
+    COUNT(projects.id) AS project_count
+  FROM users
+  LEFT JOIN projects ON projects.owner_id = users.id
+  WHERE users.id = \${userId}
+    AND projects.archived_at IS NULL
+  GROUP BY users.name
+  ORDER BY project_count DESC
+  LIMIT 10;
+\`;
+`;export{n as default};

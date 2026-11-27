@@ -1,0 +1,20 @@
+const n=`@let title = '我的项目';
+
+<h1>{{ title }}</h1>
+@if (projects.length > 0) {
+  <ul>
+    @for (project of projects; track project.id) {
+      <li [class.featured]="project.featured">{{ project.name }}</li>
+    } @empty {
+      <li>还没有项目</li>
+    }
+  </ul>
+} @else {
+  <p>创建你的第一个项目吧。</p>
+}
+
+@switch (status) {
+  @case ('ready') { <span>已就绪</span> }
+  @default { <span>正在加载…</span> }
+}
+`;export{n as default};

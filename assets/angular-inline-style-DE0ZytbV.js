@@ -1,0 +1,21 @@
+const n=`import { Component } from '@angular/core';
+
+@Component({
+  selector: 'app-profile',
+  template: '<article class="profile">你好，Shiki</article>',
+  styles: [\`
+    $accent: #d66a3a;
+
+    :host { display: block; }
+
+    .profile {
+      border: 1px solid $accent;
+      border-radius: 12px;
+      padding: 24px;
+
+      &:hover { background: rgba($accent, 0.08); }
+    }
+  \`],
+})
+export class ProfileComponent {}
+`;export{n as default};

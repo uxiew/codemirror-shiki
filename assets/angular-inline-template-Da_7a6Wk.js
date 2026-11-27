@@ -1,0 +1,19 @@
+const n=`import { Component } from '@angular/core';
+
+@Component({
+  selector: 'app-welcome',
+  template: \`
+    <section class="welcome">
+      <h1>你好，{{ name }}</h1>
+      @if (notifications > 0) {
+        <p [class.unread]="true">你有 {{ notifications }} 条新消息</p>
+      }
+      <button (click)="notifications = 0">全部标记为已读</button>
+    </section>
+  \`,
+})
+export class WelcomeComponent {
+  name = 'Shiki';
+  notifications = 3;
+}
+`;export{n as default};

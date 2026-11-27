@@ -1,0 +1,7 @@
+const e=`user.name | uppercase
+items.length > 0 && isVisible
+user?.profile?.avatar ?? '/default.svg'
+price * quantity | currency : 'CNY'
+selected ? '已选择' : '请选择'
+trackById($index, item)
+`;export{e as default};

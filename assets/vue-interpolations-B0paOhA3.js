@@ -1,0 +1,17 @@
+const n=`<script setup lang="ts">
+const user = { name: 'Shiki', role: '开发者' };
+const languages = ['TypeScript', 'Vue', 'Rust'];
+const count = 18;
+<\/script>
+
+<template>
+  <article>
+    <h1>你好，{{ user.name }}</h1>
+    <p>{{ user.role.toUpperCase() }}</p>
+    <p>已加载 {{ count }} 种嵌入语法</p>
+    <p>{{ languages.join(' · ') }}</p>
+    <span>{{ count > 0 ? '准备就绪' : '加载中…' }}</span>
+    <pre>{{ JSON.stringify(user, null, 2) }}</pre>
+  </article>
+</template>
+`;export{n as default};
