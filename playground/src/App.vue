@@ -11,10 +11,16 @@ import {
 } from "./grammars";
 import { loadSample } from "./samples";
 import type { CMProps } from "./types";
+import themeColors from "./theme-colors.json";
 import "./playground.css";
 
 const grammar = useStorage("tm-grammar", "typescript");
-const theme = useStorage("tm-theme", "github-light");
+const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+const theme = useStorage("tm-theme", prefersDark ? "github-dark" : "github-light");
+const lastTheme = useStorage("tm-last-theme", {
+  light: "github-light",
+  dark: "github-dark",
+});
 const engine = useStorage<CMProps["engine"]>("tm-engine", "oniguruma");
 const mode = useStorage<CMProps["mode"]>("tm-mode", "editor");
 const params = new URLSearchParams(window.location.search);
@@ -44,6 +50,14 @@ const selectedTheme = computed(
   () => themes.find((item) => item.id === theme.value)!,
 );
 const isDark = computed(() => selectedTheme.value.type === "dark");
+type Palette = { bg: string; fg: string; tokens: string[] };
+const palettes = themeColors as Record<string, Palette>;
+const palette = (id: string) =>
+  palettes[id] ?? palettes[isDark.value ? "github-dark" : "github-light"];
+const themeStyle = computed(() => {
+  const { bg, fg, tokens } = palette(theme.value);
+  return { "--bg": bg, "--fg": fg, "--accent": tokens[0] };
+});
 const common = [
   "typescript",
   "javascript",
@@ -218,8 +232,21 @@ watch([tab, grammar, theme, engine, mode], () => {
 onBeforeUnmount(() => {
   clearTimeout(copyTimer);
 });
+watch(
+  theme,
+  (id) => {
+    const info = themes.find((item) => item.id === id);
+    if (info) lastTheme.value = { ...lastTheme.value, [info.type]: id };
+  },
+  { immediate: true },
+);
 function toggleAppearance() {
-  theme.value = isDark.value ? "github-light" : "github-dark";
+  const next = isDark.value ? lastTheme.value.light : lastTheme.value.dark;
+  theme.value = themes.some((item) => item.id === next)
+    ? next
+    : isDark.value
+      ? "github-light"
+      : "github-dark";
 }
 async function copyCode() {
   try {
@@ -238,36 +265,63 @@ async function copyCode() {
 </script>
 
 <template>
-  <div class="playground" :class="{ 'is-dark': isDark }">
-    <header class="site-header">
+  <div
+    class="playground"
+    :class="{ 'is-dark': isDark }"
+    :style="themeStyle"
+  >
+    <header class="topbar">
       <a
         class="brand"
         href="https://github.com/uxiew/codemirror-shiki"
         target="_blank"
         rel="noreferrer"
         ><span class="brand-mark" aria-hidden="true">&lt;/&gt;</span
-        ><span
-          >cmshiki<span class="brand-divider">/</span
-          ><span class="brand-subtitle">语法实验室</span></span
-        ></a
+        ><span>cmshiki</span
+        ><span class="brand-subtitle">语法实验室</span></a
       >
-      <nav class="header-links" aria-label="项目链接">
+      <div class="topbar-controls">
+        <div class="segmented" aria-label="接入方式">
+          <button
+            :class="{ active: mode === 'editor' }"
+            :aria-pressed="mode === 'editor'"
+            @click="mode = 'editor'"
+          >
+            ShikiEditor</button
+          ><button
+            :class="{ active: mode === 'shiki' }"
+            :aria-pressed="mode === 'shiki'"
+            @click="mode = 'shiki'"
+          >
+            Shiki 扩展
+          </button>
+        </div>
+        <label class="engine-select"
+          ><span>正则引擎</span>
+          <select v-model="engine" aria-label="正则引擎">
+            <option value="oniguruma">Oniguruma</option>
+            <option value="javascript">JavaScript</option>
+          </select></label
+        >
+      </div>
+      <nav class="topbar-links" aria-label="项目链接">
         <a
           href="https://textmate-grammars-themes.netlify.app"
           target="_blank"
           rel="noreferrer"
-          >语法来源 ↗</a
+          >语法来源</a
         >
         <a
           href="https://github.com/uxiew/codemirror-shiki"
           target="_blank"
           rel="noreferrer"
-          >GitHub ↗</a
-        >
-        <span class="header-rule"></span>
+          aria-label="GitHub"
+          ><span class="i-carbon-logo-github" aria-hidden="true"></span
+        ></a>
         <button
           class="icon-button"
           :aria-label="isDark ? '切换到浅色主题' : '切换到深色主题'"
+          :title="isDark ? lastTheme.light : lastTheme.dark"
           @click="toggleAppearance"
         >
           <span
@@ -277,28 +331,6 @@ async function copyCode() {
         </button>
       </nav>
     </header>
-    <section class="intro">
-      <div>
-        <p class="eyebrow"><span class="live-dot"></span>CODEMIRROR × SHIKI</p>
-        <h1>好代码，也要好看<span>。</span></h1>
-        <p class="intro-description">
-          探索 TextMate 语法与主题，在编辑器里找到你的配色。
-        </p>
-      </div>
-      <div class="intro-stats" aria-label="可用资源">
-        <div>
-          <strong>{{ languages.length }}</strong
-          ><span>种语法</span>
-        </div>
-        <span class="stats-rule"></span>
-        <div>
-          <strong>{{ themes.length }}</strong
-          ><span>款主题</span>
-        </div>
-        <span class="stats-rule"></span>
-        <div><strong>18</strong><span>种嵌入 / 注入</span></div>
-      </div>
-    </section>
     <main class="workbench">
       <aside class="sidebar" aria-label="语法与主题选择">
         <div class="sidebar-tabs" role="tablist" aria-label="资源类型">
@@ -310,8 +342,7 @@ async function copyCode() {
             :class="{ active: sidebar === 'language' }"
             @click="sidebar = 'language'"
           >
-            <span class="i-carbon-code" aria-hidden="true"></span>语法
-            <span class="count">{{ languages.length }}</span>
+            语法<span class="count">{{ languages.length }}</span>
           </button>
           <button
             id="theme-tab"
@@ -321,8 +352,7 @@ async function copyCode() {
             :class="{ active: sidebar === 'theme' }"
             @click="sidebar = 'theme'"
           >
-            <span class="i-carbon-color-palette" aria-hidden="true"></span>主题
-            <span class="count">{{ themes.length }}</span>
+            主题<span class="count">{{ themes.length }}</span>
           </button>
         </div>
         <div class="search-box">
@@ -346,14 +376,15 @@ async function copyCode() {
             :aria-pressed="!injectionOnly"
             @click="injectionOnly = false"
           >
-            全部语法</button
+            全部</button
           ><button
             :class="{ active: injectionOnly }"
             :aria-pressed="injectionOnly"
             @click="injectionOnly = true"
           >
-            嵌入 / 注入 <span>18</span>
+            嵌入 / 注入
           </button>
+          <span class="filter-count">{{ filteredLanguages.length }}</span>
         </div>
         <div class="filter-row" v-else aria-label="主题筛选">
           <button
@@ -369,6 +400,7 @@ async function copyCode() {
           >
             {{ item.name }}
           </button>
+          <span class="filter-count">{{ filteredThemes.length }}</span>
         </div>
         <section
           id="resource-panel"
@@ -378,21 +410,6 @@ async function copyCode() {
             sidebar === 'language' ? 'language-tab' : 'theme-tab'
           "
         >
-          <p class="list-heading">
-            {{
-              query
-                ? "搜索结果"
-                : sidebar === "language"
-                  ? injectionOnly
-                    ? "嵌入与注入语法"
-                    : "选择一种语言"
-                  : "选择你的配色"
-            }}<span>{{
-              sidebar === "language"
-                ? filteredLanguages.length
-                : filteredThemes.length
-            }}</span>
-          </p>
           <template v-if="sidebar === 'language'">
             <button
               v-for="item in filteredLanguages"
@@ -402,24 +419,13 @@ async function copyCode() {
               :aria-pressed="grammar === item.id"
               @click="grammar = item.id"
             >
-              <span
-                class="language-glyph"
-                :class="{ injection: item.injection }"
-                aria-hidden="true"
-                >{{ item.injection ? "↳" : "{ }" }}</span
-              ><span class="resource-name"
-                >{{ item.displayName
-                }}<small v-if="item.injection">{{
-                  item.host === item.id ? "嵌入语法" : `${item.host} 上下文`
-                }}</small></span
-              ><span
-                v-if="grammar === item.id"
-                class="i-carbon-checkmark selection-check"
-                aria-hidden="true"
-              ></span>
+              <span class="resource-name">{{ item.displayName }}</span
+              ><small v-if="item.injection" class="resource-tag">{{
+                item.host === item.id ? "嵌入" : item.host
+              }}</small>
             </button>
             <p v-if="!filteredLanguages.length" class="empty-state">
-              没有匹配的语法<br /><span>试试名称或别名，如 ts、vue</span>
+              没有匹配的语法，试试 ts、vue 等别名
             </p>
           </template>
           <template v-else>
@@ -431,95 +437,65 @@ async function copyCode() {
               :aria-pressed="theme === item.id"
               @click="theme = item.id"
             >
-              <span class="theme-swatch" :class="item.type" aria-hidden="true"
-                ><i></i><i></i><i></i></span
-              ><span class="resource-name">{{ item.displayName }}</span
-              ><span
-                v-if="theme === item.id"
-                class="i-carbon-checkmark selection-check"
+              <span
+                class="theme-swatch"
                 aria-hidden="true"
-              ></span>
+                :style="{
+                  background: palette(item.id).bg,
+                  color: palette(item.id).fg,
+                }"
+                ><i
+                  v-for="(color, index) in palette(item.id).tokens"
+                  :key="index"
+                  :style="{ background: color }"
+                ></i></span
+              ><span class="resource-name">{{ item.displayName }}</span>
             </button>
             <p v-if="!filteredThemes.length" class="empty-state">
-              没有匹配的主题<br /><span>换个关键词试试</span>
+              没有匹配的主题
             </p>
           </template>
         </section>
-        <div class="sidebar-footer">
-          <span class="live-dot"></span>按需加载，切换即预览
-        </div>
       </aside>
       <section class="workspace" aria-label="代码工作区">
-        <div class="workspace-toolbar">
-          <div class="segmented" aria-label="接入方式">
+        <div class="workspace-head">
+          <div class="editor-tabs" role="tablist" aria-label="代码视图">
             <button
-              :class="{ active: mode === 'editor' }"
-              :aria-pressed="mode === 'editor'"
-              @click="mode = 'editor'"
+              id="preview-tab"
+              role="tab"
+              aria-controls="editor-panel"
+              :aria-selected="tab === 'preview'"
+              :class="{ active: tab === 'preview' }"
+              @click="tab = 'preview'"
             >
-              ShikiEditor</button
+              {{ filename
+              }}<span
+                v-if="modified"
+                class="modified-dot"
+                aria-label="已修改"
+              ></span></button
             ><button
-              :class="{ active: mode === 'shiki' }"
-              :aria-pressed="mode === 'shiki'"
-              @click="mode = 'shiki'"
+              id="setup-tab"
+              role="tab"
+              aria-controls="editor-panel"
+              :aria-selected="tab === 'setup'"
+              :class="{ active: tab === 'setup' }"
+              @click="tab = 'setup'"
             >
-              Shiki 扩展
+              接入代码
             </button>
-          </div>
-          <label class="engine-select"
-            >正则引擎
-            <select v-model="engine" aria-label="正则引擎">
-              <option value="oniguruma">Oniguruma</option>
-              <option value="javascript">JavaScript</option>
-            </select></label
-          >
-        </div>
-        <div class="editor-tabs" role="tablist" aria-label="代码视图">
-          <button
-            id="preview-tab"
-            role="tab"
-            aria-controls="editor-panel"
-            :aria-selected="tab === 'preview'"
-            :class="{ active: tab === 'preview' }"
-            @click="tab = 'preview'"
-          >
-            <span class="i-carbon-code" aria-hidden="true"></span
-            >代码预览</button
-          ><button
-            id="setup-tab"
-            role="tab"
-            aria-controls="editor-panel"
-            :aria-selected="tab === 'setup'"
-            :class="{ active: tab === 'setup' }"
-            @click="tab = 'setup'"
-          >
-            <span class="i-carbon-terminal" aria-hidden="true"></span
-            >接入代码</button
-          ><span class="editor-tab-hint">{{
-            tab === "preview" ? "可直接编辑" : "复制即可开始"
-          }}</span>
-        </div>
-        <div class="file-toolbar">
-          <div class="file-label">
-            <span class="file-dot"></span
-            ><span>{{ tab === "preview" ? filename : "setup.ts" }}</span
-            ><span
-              v-if="modified && tab === 'preview'"
-              class="modified-dot"
-              aria-label="已修改"
-            ></span>
           </div>
           <div class="file-actions">
             <button
               v-if="tab === 'preview'"
               :disabled="!modified"
+              title="恢复示例代码"
               @click="cmProps.lang.value = originalSample"
             >
-              <span class="i-carbon-reset" aria-hidden="true"></span
-              >重置</button
+              <span class="i-carbon-reset" aria-hidden="true"></span>重置</button
             ><button @click="copyCode">
               <span class="i-carbon-copy" aria-hidden="true"></span
-              >{{ copyStatus || "复制代码" }}
+              >{{ copyStatus || "复制" }}
             </button>
           </div>
         </div>
@@ -562,27 +538,15 @@ async function copyCode() {
           <CodeMirror v-else v-bind="setupProps" />
         </div>
         <footer class="editor-status">
-          <span><span class="live-dot"></span>{{ selected.displayName }}</span
-          ><span class="status-theme">{{ selectedTheme.displayName }}</span
+          <span>{{ selected.displayName }}</span
+          ><span>{{ selectedTheme.displayName }}</span
           ><span class="status-spacer"></span><span>{{ lineCount }} 行</span
           ><span v-if="perfMs !== undefined"
             >初始化 {{ perfMs.toFixed(1) }} ms</span
-          ><span>UTF-8</span>
+          >
         </footer>
       </section>
     </main>
-    <footer class="page-footer">
-      <p>CodeMirror 的编辑体验，Shiki 的高亮表现。</p>
-      <p>
-        由
-        <a href="https://codemirror.net" target="_blank" rel="noreferrer"
-          >CodeMirror</a
-        >、<a href="https://shiki.style" target="_blank" rel="noreferrer"
-          >Shiki</a
-        >
-        与 TextMate 驱动 ↗
-      </p>
-    </footer>
     <span class="sr-only" role="status">{{ copyStatus }}</span>
   </div>
 </template>
