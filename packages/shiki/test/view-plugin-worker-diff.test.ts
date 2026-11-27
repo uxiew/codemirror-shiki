@@ -108,3 +108,45 @@ describe('tokenizer worker: stale tokens', () => {
     expect(errors).toEqual([]);
   });
 });
+
+const ops = ['/*', '*/', '`', '"', "'", '${', '}', '{', '//', 'x', '', ''];
+const tails = ['/*', '`', '${', '{', '"', '*/', ';', '`${'];
+const shorts = ['foo */ bar', 'a = 1;', '} `', '`', 'x */ y /* z', '// c', '"s" + `t', '}', 'b()', '*/'];
+const longLine = () => 'a=' + '1+'.repeat(110 + rnd(40)) + '1; ' + tails[rnd(tails.length)];
+const line = () => (rnd(3) === 0 ? longLine() : shorts[rnd(shorts.length)]);
+describe('tokenizer worker vs main thread: bursts on state-changing lines', () => {
+  for (const sd of [1, 3, 10]) {
+    it('seed ' + sd, async () => {
+      seed = sd;
+      const errors: any[] = [];
+      const doc = Array.from({ length: 4 + rnd(10) }, line).join('\n');
+      const w = await editor(doc, true, errors);
+      const m = await editor(doc, false, errors);
+      w.plugin.updateHighlight(w.view); m.plugin.updateHighlight(m.view);
+      await waitFor(settledW(w.plugin)); await waitFor(settledM(m.plugin));
+      for (let step = 0; step < 150; step++) {
+        const burst = 1 + rnd(3);
+        for (let b = 0; b < burst; b++) {
+          const d = w.view.state.doc;
+          const ln = d.line(1 + rnd(d.lines));
+          const mode = rnd(6);
+          let spec: any;
+          if (mode <= 2) { const at = rnd(2) ? ln.from : ln.to; spec = { changes: { from: at, to: Math.min(ln.to, at + rnd(3)), insert: ops[rnd(ops.length)] } }; }
+          else if (mode === 3) spec = { changes: { from: ln.from, to: ln.to, insert: line() } };
+          else if (mode === 4) spec = { changes: { from: ln.to, insert: '\n' + line() } };
+          else spec = { changes: { from: ln.from, to: Math.min(d.length, ln.to + 1), insert: '' } };
+          w.view.dispatch(spec); m.view.dispatch(spec);
+          if (rnd(2)) await new Promise((r) => setTimeout(r, rnd(3)));
+        }
+        await waitFor(settledW(w.plugin)); await waitFor(settledM(m.plugin));
+        await new Promise((r) => setTimeout(r, 15));
+        await waitFor(settledW(w.plugin)); await waitFor(settledM(m.plugin));
+        const a = toks(w.view, w.plugin), e = toks(m.view, m.plugin);
+        for (let i = 0; i < e.length; i++) {
+          if (a[i] !== e[i]) throw new Error(`seed ${sd} step ${step} line ${i + 1}/${e.length} len ${w.view.state.doc.line(i+1).length}\nDOC ${JSON.stringify(w.view.state.doc.toString().replace(/(1\+){20,}/g,'<L>'))}\nworker: ${a[i].slice(0,300)}\nmain:   ${e[i].slice(0,300)}`);
+        }
+      }
+      expect(errors).toEqual([]);
+    }, 120000);
+  }
+});

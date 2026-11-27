@@ -118,11 +118,12 @@ export function exposeTokenizer(
     const session = sessions.get(message.session);
     if (!session) return;
     if (message.type === 'change') {
-      // The editor ignores what was sent after `seen` for the old version.
+      // The editor ignores what was sent after `seen` for the old version and
+      // may still hold an older version of those lines: send or drop them again.
       for (const entry of session.cache.values()) {
         if (entry.seq <= message.seen) continue;
-        if (entry.posted) entry.posted = false;
-        else entry.redrop = true;
+        entry.posted = false;
+        entry.redrop = true;
       }
       for (const [line, head] of session.heads) {
         if (head.seq > message.seen) session.heads.delete(line);
