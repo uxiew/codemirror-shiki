@@ -27,11 +27,11 @@
   },
   "scripts": {
     "test": "vitest",
+    "typecheck": "pnpm -r --filter \"./packages/*\" exec tsc --noEmit -p .",
     "release": "bumpp",
     "dev": "pnpm -F playground dev",
     "build:doc": "pnpm -F playground build",
-    "build": "pnpm -r build",
-    "publish": "pnpm -r publish --access public --no-git-checks"
+    "build": "pnpm -r build"
   },
   "devDependencies": {
     "bumpp": "catalog:",

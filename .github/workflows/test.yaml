@@ -23,5 +23,9 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # 依赖包的类型来自 dist，需在 build 之后检查
+      - name: Typecheck
+        run: pnpm typecheck
+
       - name: Test
-        run: pnpm test
+        run: pnpm test --run

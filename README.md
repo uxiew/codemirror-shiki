@@ -58,3 +58,10 @@ const editor = await ShikiEditor.create({
 | [`@cmshiki/utils`](packages/utils/README.md) | 编辑器界面主题和样式工具。 |
 
 在仓库根目录运行 `pnpm install` 和 `pnpm dev`，即可启动本地 Playground。
+
+## 发版（维护者）
+
+1. 在分支上运行 `pnpm release`，选择新版本号。它会同步修改根目录和 `packages/*` 的版本并提交，不打 tag、不推送。
+2. 开 PR 合进 main。[Release workflow](.github/workflows/release.yaml) 发现 `v<版本>` tag 不存在时，依次执行 build、tsc、测试，全部通过后发布三个包到 npm，再打 tag、创建 GitHub Release。带 `-` 的版本（如 `1.0.0-beta.1`）发到 npm 的 `next` 并标为预发布。
+
+npm 认证使用 [Trusted Publishing](https://docs.npmjs.com/trusted-publishers)：在 npm 上为三个包各添加一个 Trusted Publisher（仓库 `uxiew/codemirror-shiki`，workflow `release.yaml`）。也可以改用仓库 secret `NPM_TOKEN`。

@@ -1,0 +1,110 @@
+name: Release
+
+# main 上根 package.json 的版本号对应的 tag 不存在时自动发版：
+# 检查版本一致 → tsc / build / test → 发布 npm → 打 tag → 创建 GitHub Release。
+# 已发布的包和已存在的 tag 会跳过，失败后重跑是安全的。
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release: ${{ steps.version.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        run: |
+          version=$(jq -r .version package.json)
+          for pkg in packages/*/package.json; do
+            v=$(jq -r .version "$pkg")
+            if [ "$v" != "$version" ]; then
+              echo "::error file=$pkg::版本 $v 与根 package.json 的 $version 不一致"
+              exit 1
+            fi
+          done
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
+            echo "tag v$version 已存在，跳过发版"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  release:
+    name: Verify and publish v${{ needs.check.outputs.version }}
+    needs: check
+    if: needs.check.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js + pnpm
+        uses: uxiew/action-setup-node-pnpm@main
+        with:
+          node-version: "24"
+          args: "--frozen-lockfile"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Build
+        run: pnpm build
+
+      # 依赖包的类型来自 dist，需在 build 之后检查
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test --run
+
+      # npm Trusted Publishing（OIDC）需要 npm >= 11.5.1
+      - name: Upgrade npm
+        run: npm install -g npm@^11.5.1
+
+      - name: Publish to npm
+        env:
+          # 配置了 Trusted Publishing 时可以不设 NPM_TOKEN
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          tag=latest
+          case "$VERSION" in *-*) tag=next ;; esac
+          mkdir -p .release
+          for dir in packages/*/; do
+            name=$(jq -r .name "$dir/package.json")
+            if npm view "$name@$VERSION" version >/dev/null 2>&1; then
+              echo "$name@$VERSION 已在 npm 上，跳过"
+              continue
+            fi
+            # pnpm pack 会把 workspace: / catalog: 换成实际版本
+            tarball=$(cd "$dir" && pnpm pack --pack-destination "$GITHUB_WORKSPACE/.release" | tail -n1)
+            npm publish "$tarball" --access public --provenance --tag "$tag"
+          done
+
+      - name: Create tag and GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git tag "v$VERSION" "$GITHUB_SHA"
+          git push origin "v$VERSION"
+          flags=--generate-notes
+          case "$VERSION" in *-*) flags="$flags --prerelease" ;; esac
+          gh release create "v$VERSION" --verify-tag --title "v$VERSION" $flags
