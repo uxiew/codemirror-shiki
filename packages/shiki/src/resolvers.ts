@@ -21,7 +21,7 @@ export type LangLoader = () => Awaitable<
   MaybeModule<MaybeArray<LanguageRegistration>>
 >;
 
-export type ThemeLoader = () => Awaitable<ThemeInput>;
+export type ThemeLoader = () => ThemeModule;
 
 function unwrapModuleDefault<T>(value: MaybeModule<T>): T {
   if (
