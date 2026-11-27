@@ -42,6 +42,19 @@ const editor = await ShikiEditor.create({
 - `defaultColor` 选择初始主题 key；`changeTheme(key)` 在运行时切换。
 - 多个编辑器可以共用同一个 `highlighter`；卸载编辑器时调用 `editor.destroy()`。
 
-[编辑器选项](packages/editor/README.md) · [CodeMirror 扩展选项](packages/shiki/README.md) · [主题工具](packages/utils/README.md)
+## 特性
+
+- 支持 Shiki 的全部 TextMate 语法和主题，包括 Vue、Markdown 等嵌入语法。
+- 运行时切换语言和主题；语法、主题可通过 `resolveLang` / `resolveTheme` 按需加载。
+- 多个编辑器共用一个扩展或 highlighter 时，缓存和主题互不影响。
+- 大文件友好：远距离跳转先出近似高亮再精确收敛，超长行有长度和时间上限。
+
+## 文档
+
+| 包 | 用途 |
+| --- | --- |
+| [`@cmshiki/editor`](packages/editor/README.md) | 直接创建编辑器：选项、实例方法、切换语言和主题。 |
+| [`@cmshiki/shiki`](packages/shiki/README.md) | 给已有 CodeMirror 加高亮：全部选项、`updateEffect`、按需加载、多编辑器、大文件。 |
+| [`@cmshiki/utils`](packages/utils/README.md) | 编辑器界面主题和样式工具。 |
 
 在仓库根目录运行 `pnpm install` 和 `pnpm dev`，即可启动本地 Playground。

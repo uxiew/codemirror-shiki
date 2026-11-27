@@ -1,6 +1,6 @@
 # @cmshiki/editor
 
-用 Shiki 高亮的 CodeMirror 6 编辑器封装，负责创建编辑器、切换主题和同步文档。已有 CodeMirror 编辑器时，请使用 [`@cmshiki/shiki`](https://github.com/uxiew/codemirror-shiki/tree/main/packages/shiki)。
+用 Shiki 高亮的 CodeMirror 6 编辑器封装，负责创建编辑器、切换语言和主题、读写内容。已有 CodeMirror 编辑器时，用 [`@cmshiki/shiki`](https://github.com/uxiew/codemirror-shiki/tree/main/packages/shiki)。
 
 [在线 Playground](https://uxiew.github.io/codemirror-shiki/)
 
@@ -19,28 +19,53 @@ import { ShikiEditor } from '@cmshiki/editor'
 import { createHighlighter } from 'shiki'
 
 const highlighter = await createHighlighter({
-  langs: ['javascript'],
-  themes: ['github-light'],
+  langs: ['javascript', 'typescript'],
+  themes: ['github-light', 'github-dark'],
 })
 
 const editor = await ShikiEditor.create({
-  parent: document.body,
+  parent: document.getElementById('app')!,
   doc: 'const answer = 42',
   highlighter,
   lang: 'javascript',
-  themes: { light: 'github-light' },
+  themes: { light: 'github-light', dark: 'github-dark' },
+  defaultColor: 'light',
+  onDocChanged: (update) => console.log(update.state.doc.length),
 })
+
+editor.render({ lang: 'typescript' })   // 切换语言
+await editor.changeTheme('dark')        // 切换主题，参数是 themes 的 key
+editor.setDoc('let x: number = 1')      // 替换内容
+editor.getDoc()                         // 读取内容
+editor.destroy()                        // 卸载
 ```
 
-## 常用选项与方法
+用 `ShikiEditor.create()` 创建：它先加载好高亮再创建编辑器，首屏不会出现无色闪烁。`new ShikiEditor(options)` 仍可用，但高亮会在创建后异步挂上。
 
-| 选项 | 用途 |
+## 选项
+
+`ShikiEditor.create(options)` 接受 CodeMirror 的 `EditorViewConfig` 和 [`@cmshiki/shiki` 的全部选项](https://github.com/uxiew/codemirror-shiki/tree/main/packages/shiki#选项)：
+
+| 选项 | 说明 |
 | --- | --- |
-| `parent`、`doc`、`extensions` | 挂载节点、初始内容和额外的 CodeMirror 扩展。 |
-| `highlighter`、`lang` | 已初始化的 Shiki highlighter 和当前语言。可在多个编辑器间复用 highlighter。 |
-| `themes`、`defaultColor` | 主题注册表和初始主题 key，例如 `light`，不是 `github-light`。 |
-| `resolveLang`、`resolveTheme` | 用于加载 highlighter 中尚未注册的语法和主题。 |
+| `parent`、`doc`、`extensions`、`state`… | 原样传给 `new EditorView()`。`extensions` 里可放行号、快捷键等其他扩展。 |
+| `highlighter` | 必填，可在多个编辑器间共用。 |
+| `lang` | 当前语言。 |
+| `theme` | 单主题写法，不需要切换主题时用。 |
+| `themes`、`defaultColor` | 主题注册表和初始 key。`defaultColor` 是 key，例如 `'dark'`，不是 `'github-dark'`；不传时依次选 `dark`、`light`、第一个 key。 |
+| `onDocChanged(update)` | 文档变化时调用，也可用 `editor.onDocChanged(cb)` 后设。 |
+| `themeStyle`、`resolveLang`、`resolveTheme`、`tokenizeMaxLineLength`… | 见 `@cmshiki/shiki`。 |
 
-用 `editor.render({ lang })` 切换语言，或用 `await editor.changeTheme(key)` 切换到已注册的主题。卸载时调用 `editor.destroy()`。
+## 实例
 
-当前源码用 `getDoc()` 和 `setDoc(doc)` 读写内容，用 `onDocChanged(callback)` 监听文档变化。npm `0.2.0` 的文档读写方法仍叫 `getValue()` 和 `setValue(value)`。
+| 成员 | 说明 |
+| --- | --- |
+| `view` | 底层 `EditorView`，可直接 `dispatch`。 |
+| `render(options)` | 运行时修改 `lang` 等 Shiki 选项。 |
+| `changeTheme(key)` | 切换到 `themes` 中的主题，返回 Promise。 |
+| `getDoc()` / `setDoc(doc)` | 读写全文。npm `0.2.0` 中叫 `getValue()` / `setValue(value)`。 |
+| `onDocChanged(callback)` | 设置文档变化回调。 |
+| `getTheme` | `Promise<(key, view?) => Extension>`，拿到主题扩展自行组合。 |
+| `destroy()` | 销毁编辑器并释放缓存。 |
+
+`createLangResolver` 和 `createThemeResolver` 也从本包导出，用法见 `@cmshiki/shiki`。
