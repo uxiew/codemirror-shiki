@@ -11,7 +11,10 @@ const themeName = params.get('theme') || 'github-dark';
 const repeat = Number(params.get('repeat') || 1);
 
 async function main() {
-  const sample: string = (await import(`../../samples/${lang}.sample?raw`)).default;
+  const src = params.get('src');
+  const sample: string = src
+    ? await (await fetch(src)).text()
+    : (await import(`../../samples/${lang}.sample?raw`)).default;
   const doc = Array.from({ length: repeat }, () => sample).join('\n');
   const highlighter = await createHighlighterCore({
     langs: [(await import(`../node_modules/tm-grammars/grammars/${lang}.json`)).default],
@@ -19,7 +22,7 @@ async function main() {
     engine: engine === 'javascript' ? createJavaScriptRegexEngine() : createOnigurumaEngine(() => import('shiki/wasm')),
   });
   const { shiki } = await shikiToCodeMirror({ highlighter, lang, theme: themeName, themeStyle: params.get('style') === 'cm' ? 'cm' : 'shiki' });
-  const view = new EditorView({ doc, parent: document.getElementById('app')!, extensions: [basicSetup, shiki] });
+  const view = new EditorView({ doc, parent: document.getElementById('app')!, extensions: params.get('plain') ? [basicSetup] : [basicSetup, shiki] });
   (window as any).__view = view;
   (window as any).__hl = highlighter;
   (window as any).__lang = lang;
