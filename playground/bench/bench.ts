@@ -21,7 +21,10 @@ async function main() {
     themes: [(await import(`../node_modules/tm-themes/themes/${themeName}.json`)).default],
     engine: engine === 'javascript' ? createJavaScriptRegexEngine() : createOnigurumaEngine(() => import('shiki/wasm')),
   });
-  const { shiki } = await shikiToCodeMirror({ highlighter, lang, theme: themeName, themeStyle: params.get('style') === 'cm' ? 'cm' : 'shiki' });
+  const tokenizeWorker = params.get('worker')
+    ? () => new Worker(new URL('./shiki.worker.ts', import.meta.url), { type: 'module' })
+    : undefined;
+  const { shiki } = await shikiToCodeMirror({ highlighter, lang, theme: themeName, themeStyle: params.get('style') === 'cm' ? 'cm' : 'shiki', tokenizeWorker });
   const view = new EditorView({ doc, parent: document.getElementById('app')!, extensions: params.get('plain') ? [basicSetup] : [basicSetup, shiki] });
   (window as any).__view = view;
   (window as any).__hl = highlighter;
