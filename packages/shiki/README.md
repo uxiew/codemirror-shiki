@@ -50,3 +50,4 @@ const view = new EditorView({
 | `themeStyle` | `shiki`（默认）使用行内样式，`cm` 使用 CSS 类。 |
 | `resolveLang`、`resolveTheme` | 用于加载 highlighter 中尚未注册的语法和主题。 |
 | `tokenizeMaxLineLength`、`tokenizeTimeLimit` | 控制超长行的处理阈值和单行解析的时间上限。 |
+| `tokenizeWorker` | 返回一个新 Worker 的函数。Worker 里调用 `@cmshiki/shiki/worker` 的 `exposeTokenizer`，用同样的语法和主题创建 Shiki core；超过 `workerMinLineLength`（默认 1000）的行在 Worker 里完整分词，压缩后的 bundle 不再卡主线程。 |

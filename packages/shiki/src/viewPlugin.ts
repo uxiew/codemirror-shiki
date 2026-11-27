@@ -224,6 +224,7 @@ class ShikiView {
     public shikiHighlighter: ShikiHighlighter,
     private readonly view: EditorView,
   ) {
+    shikiHighlighter.onWorkerTokens = () => this.updateHighlight(view);
     // With a warm grammar this styles the first frame right away.
     this.updateHighlight(view, { sync: true });
   }
@@ -232,6 +233,7 @@ class ShikiView {
     this.cancelPendingHighlight();
     this.cancelPendingViewportSettle();
     this.clearDecorations();
+    this.shikiHighlighter.onWorkerTokens = null;
     this.shikiHighlighter.releaseView(this.view);
   }
 

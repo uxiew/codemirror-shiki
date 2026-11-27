@@ -9,6 +9,7 @@ import type {
   ThemeInput,
 } from './shiki.types';
 import type { LangResolver, ThemeResolver } from '../resolvers';
+import type { TokenizerPort } from '../worker-protocol';
 export type InitShikiFn = (
   options: Omit<Options, 'theme' | 'themeStyle'>,
 ) => Promise<Highlighter>;
@@ -179,6 +180,28 @@ export interface Options<
    * @default true
    */
   versionGuard?: boolean;
+  /**
+   * Creates a worker that tokenizes long lines off the main thread, so a
+   * minified bundle neither blocks typing nor stays uncolored past its first
+   * characters. The worker calls `exposeTokenizer` from
+   * `@cmshiki/shiki/worker` with a Shiki core that has the same languages and
+   * themes. It is called once per extension, and that one worker serves every
+   * editor using the extension; return a new worker on each call. The worker
+   * core needs every language and theme the editor may switch to; when the
+   * worker fails, the editor tokenizes on the main thread from then on.
+   *
+   * @example
+   * ```ts
+   * tokenizeWorker: () =>
+   *   new Worker(new URL('./tokenizer.worker.ts', import.meta.url), { type: 'module' })
+   * ```
+   */
+  tokenizeWorker?: () => TokenizerPort;
+  /**
+   * With `tokenizeWorker`, lines at least this long are left to the worker.
+   * @default 1000
+   */
+  workerMinLineLength?: number;
 }
 
 type UnknownOptions =
@@ -187,7 +210,9 @@ type UnknownOptions =
   | 'grammarState'
   | 'grammarContextCode'
   | 'highlighter'
-  | 'versionGuard';
+  | 'versionGuard'
+  | 'tokenizeWorker'
+  | 'workerMinLineLength';
 
 export type ShikiToCMOptions<TThemes extends ThemeRegistry = ThemeRegistry> =
   Required<Omit<Options<TThemes>, 'theme' | UnknownOptions>> &

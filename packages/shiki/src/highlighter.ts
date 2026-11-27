@@ -1,4 +1,4 @@
-import { Text, type ChangeSet, type Line } from '@codemirror/state';
+import type { ChangeSet, Line, Text } from '@codemirror/state';
 import { Decoration } from '@codemirror/view';
 import { newStyleModuleName, mountStyles } from '@cmshiki/utils';
 
@@ -7,6 +7,11 @@ import type { Highlighter, ShikiToCMOptions, InitShikiFn } from './types/types';
 import { toStyleObject } from './utils';
 import { Base } from './base';
 import { getPrimaryRuntimeLangId, getRuntimeLangLabel } from './lang-normalize';
+import { grammarStatesEqual, remapLineCache } from './line-cache';
+import { TokenizeWorkerClient } from './worker-client';
+import type { FromWorker } from './worker-protocol';
+
+export { grammarStatesEqual, remapLineCache };
 
 // Decode vscode-textmate encoded token metadata without importing
 // `@shikijs/vscode-textmate` at runtime (avoids bundler resolution issues).
@@ -118,69 +123,6 @@ interface BoundedTokenizeResult {
 }
 
 /**
- * Compare two grammar states. vscode-textmate stacks implement `equals()`;
- * the document start is `null` on both sides.
- */
-export function grammarStatesEqual(
-  a: GrammarState | null | undefined,
-  b: GrammarState | null | undefined,
-): boolean {
-  if (a === b) return true;
-  if (!a || !b) return false;
-  const equals = (a as any).equals;
-  return typeof equals === 'function' ? Boolean(equals.call(a, b)) : false;
-}
-
-/**
- * Move cached lines through a document change.
- *
- * Lines the change touched are dropped and lines after it are renumbered, so
- * their entries can be reused once the walk from the edit reaches them.
- * Returns the first line number (in the new document) whose cached state can
- * no longer be trusted as a starting point. Lines before it are untouched.
- */
-export function remapLineCache<T>(
-  cache: Map<number, T>,
-  oldDoc: Text,
-  newDoc: Text,
-  changes: ChangeSet,
-): number {
-  const spans: { oldStart: number; oldEnd: number; delta: number }[] = [];
-  let firstDirty = newDoc.lines + 1;
-  changes.iterChangedRanges((fromA, toA, fromB, toB) => {
-    const oldStart = oldDoc.lineAt(fromA).number;
-    const oldEnd = oldDoc.lineAt(toA).number;
-    const newStart = newDoc.lineAt(fromB).number;
-    const newEnd = newDoc.lineAt(toB).number;
-    firstDirty = Math.min(firstDirty, newStart);
-    spans.push({
-      oldStart,
-      oldEnd,
-      delta: newEnd - newStart - (oldEnd - oldStart),
-    });
-  });
-  if (spans.length === 0 || cache.size === 0) return firstDirty;
-
-  const lines = Array.from(cache.keys()).sort((a, b) => a - b);
-  const moved: [number, T][] = [];
-  let spanIndex = 0;
-  let delta = 0;
-  for (const line of lines) {
-    while (spanIndex < spans.length && spans[spanIndex].oldEnd < line) {
-      delta += spans[spanIndex].delta;
-      spanIndex++;
-    }
-    if (spanIndex < spans.length && spans[spanIndex].oldStart <= line) {
-      continue; // the change touched this line, its text is stale
-    }
-    moved.push([line + delta, cache.get(line)!]);
-  }
-  cache.clear();
-  for (const [line, entry] of moved) cache.set(line, entry);
-  return firstDirty;
-}
-
-/**
  * Compute which cached line states should be removed to bound memory growth.
  * Keeps a dense window around the current viewport and sparse anchor states elsewhere.
  */
@@ -227,6 +169,33 @@ export function computePrunableCacheLines(
   return removable.concat(fallbackRemovals);
 }
 
+/** Tokens of one line computed by the tokenizer worker. */
+interface WorkerLine {
+  text: string;
+  tokens: ArrayLike<number>;
+  length: number;
+  exact: boolean;
+}
+
+/** Shift token offsets of a line through a change inside it. */
+function shiftTokens(
+  tokens: ArrayLike<number>,
+  at: number,
+  removed: number,
+  inserted: number,
+): number[] {
+  const result: number[] = [];
+  for (let j = 0; j < tokens.length; j += 2) {
+    const start = tokens[j];
+    const moved =
+      start <= at ? start : start >= at + removed ? start - removed + inserted : at;
+    result.push(moved, tokens[j + 1]);
+  }
+  return result;
+}
+
+const DEFAULT_WORKER_MIN_LINE_LENGTH = 1000;
+
 export class ShikiHighlighter extends Base {
   view: any = undefined;
   /** Tokenization results per 1-based line number of `cacheDoc`. */
@@ -250,6 +219,25 @@ export class ShikiHighlighter extends Base {
   private freshLines = 0;
   private internal: Highlighter;
   private isCoreUpdating = false;
+
+  /** The tokenizer worker; created on first use, shared with forks. */
+  private shared: { worker: TokenizeWorkerClient | null } = { worker: null };
+  private workerSession = 0;
+  private workerFailed = false;
+  /** The document the worker has, as of `workerVersion`. */
+  private workerDoc: Text | null = null;
+  private workerVersion = 0;
+  /** Latest version the worker walked to the end; its tokens are all exact then. */
+  private workerDoneVersion = -1;
+  private workerSeen = 0;
+  private workerLang = '';
+  private workerTheme = '';
+  private workerColorMap: string[] = [];
+  private workerViewport = '';
+  /** Worker tokens per line of `workerDoc`. */
+  private workerLines = new Map<number, WorkerLine>();
+  /** Called when worker tokens arrive for a visible line. */
+  onWorkerTokens: (() => void) | null = null;
 
   constructor(
     shikiCore: Highlighter,
@@ -301,6 +289,7 @@ export class ShikiHighlighter extends Base {
         this.initShikiFn,
       );
       highlighter.owners = this.owners;
+      highlighter.shared = this.shared;
       highlighter.defaultTheme = this.defaultTheme;
       highlighter.currentTheme = this.defaultTheme;
     }
@@ -313,6 +302,7 @@ export class ShikiHighlighter extends Base {
     if (this.view !== view) return;
     this.owners.delete(view);
     this.view = undefined;
+    this.closeWorkerSession();
     this.currentTheme = this.defaultTheme;
     this.resetLineCache();
     this.markCache.clear();
@@ -357,6 +347,7 @@ export class ShikiHighlighter extends Base {
    * reused.
    */
   applyDocChanges(oldDoc: Text, newDoc: Text, changes: ChangeSet) {
+    this.applyWorkerChanges(oldDoc, newDoc, changes);
     if (this.cacheDoc === null) {
       this.cacheDoc = newDoc;
       return;
@@ -399,6 +390,16 @@ export class ShikiHighlighter extends Base {
     state: GrammarState | null,
     budget: HighlightBudgetOptions,
   ): BoundedTokenizeResult {
+    if (this.usesWorker && text.length >= this.workerMinLineLength) {
+      // Left to the worker; pass the state on like a line over the time limit.
+      return {
+        tokens: null,
+        ruleStack: state,
+        tokenizedLength: 0,
+        timedOut: false,
+        boundByDeadline: false,
+      };
+    }
     const maxLineLength = Number(this.configs.tokenizeMaxLineLength) || 0;
     let source = text;
     if (maxLineLength > 0 && text.length > maxLineLength) {
@@ -491,6 +492,203 @@ export class ShikiHighlighter extends Base {
       this.validUpTo = line.number;
     }
     return entry;
+  }
+
+  private get usesWorker(): boolean {
+    return (
+      !!this.configs.tokenizeWorker &&
+      !this.workerFailed &&
+      !this.shared.worker?.failed
+    );
+  }
+
+  private get workerMinLineLength(): number {
+    return (
+      Number(this.configs.workerMinLineLength) || DEFAULT_WORKER_MIN_LINE_LENGTH
+    );
+  }
+
+  /** Bring the worker up to `doc`, the language, the theme and the viewport. */
+  private syncWorker(
+    doc: Text,
+    lang: string,
+    theme: string,
+    fromLine: number,
+    toLine: number,
+  ) {
+    if (!this.usesWorker) return;
+    if (this.workerSession === 0) {
+      this.shared.worker ??= new TokenizeWorkerClient(
+        this.configs.tokenizeWorker!(),
+      );
+      this.workerSession = this.shared.worker.open((message) =>
+        this.onWorkerMessage(message),
+      );
+    }
+    const worker = this.shared.worker!;
+    if (
+      this.workerDoc !== doc ||
+      this.workerLang !== lang ||
+      this.workerTheme !== theme
+    ) {
+      this.workerDoc = doc;
+      this.workerLang = lang;
+      this.workerTheme = theme;
+      this.workerLines.clear();
+      this.workerViewport = '';
+      worker.post({
+        type: 'open',
+        session: this.workerSession,
+        version: ++this.workerVersion,
+        text: doc.toString(),
+        lang,
+        theme,
+        minLength: this.workerMinLineLength,
+      });
+    }
+    // Highlight runs in chunks; the worker should follow what is on screen.
+    const visible =
+      this.view?.state?.doc === doc ? this.visibleLineRanges() : [];
+    if (visible.length > 0) {
+      fromLine = visible[0][0];
+      toLine = visible[visible.length - 1][1];
+    }
+    const viewport = `${fromLine}:${toLine}`;
+    if (viewport !== this.workerViewport) {
+      this.workerViewport = viewport;
+      worker.post({
+        type: 'viewport',
+        session: this.workerSession,
+        from: fromLine,
+        to: toLine,
+      });
+    }
+  }
+
+  private applyWorkerChanges(oldDoc: Text, newDoc: Text, changes: ChangeSet) {
+    if (this.workerSession === 0 || this.workerDoc !== oldDoc) return;
+    // A line edited in place keeps its old tokens, shifted, until the worker
+    // has the new ones: a long line would otherwise turn plain for seconds.
+    const patched = new Map<number, WorkerLine>();
+    // Two changes on one line would each shift the original tokens.
+    const touched = new Set<number>();
+    changes.iterChanges((fromA, toA, fromB, toB, inserted) => {
+      const oldLine = oldDoc.lineAt(fromA);
+      if (touched.has(oldLine.number)) {
+        patched.delete(newDoc.lineAt(fromB).number);
+        return;
+      }
+      touched.add(oldLine.number);
+      if (toA > oldLine.to || inserted.lines > 1) return;
+      const previous = this.workerLines.get(oldLine.number);
+      if (!previous || previous.text !== oldLine.text) return;
+      const newLine = newDoc.lineAt(fromB);
+      if (toB > newLine.to) return;
+      const at = fromA - oldLine.from;
+      patched.set(newLine.number, {
+        text: newLine.text,
+        tokens: shiftTokens(previous.tokens, at, toA - fromA, toB - fromB),
+        length: Math.max(
+          0,
+          previous.length + (previous.length > at ? toB - fromB - (toA - fromA) : 0),
+        ),
+        exact: false,
+      });
+    });
+    remapLineCache(this.workerLines, oldDoc, newDoc, changes);
+    for (const [line, entry] of patched) this.workerLines.set(line, entry);
+    this.workerDoc = newDoc;
+    this.shared.worker!.post({
+      type: 'change',
+      session: this.workerSession,
+      version: ++this.workerVersion,
+      changes: changes.toJSON(),
+      seen: this.workerSeen,
+    });
+  }
+
+  private onWorkerMessage(message: FromWorker) {
+    if (message.type === 'error') {
+      if (this.configs.warnings) {
+        console.warn(
+          '[@cmshiki/shiki] tokenizer worker failed, tokenizing on the main thread:',
+          message.message,
+        );
+      }
+      this.workerFailed = true;
+      this.closeWorkerSession();
+      // Long lines were skipped for the worker; tokenize them here instead.
+      this.resetLineCache();
+      this.onWorkerTokens?.();
+      return;
+    }
+    this.workerSeen = message.seq;
+    // Line numbers of an older version no longer match the document.
+    if (message.version !== this.workerVersion || !this.workerDoc) return;
+    const doc = this.workerDoc;
+    this.workerColorMap = message.colorMap;
+    let visibleChanged = false;
+    const visible = this.visibleLineRanges();
+    const touch = (line: number) => {
+      if (!visibleChanged && visible.some(([a, b]) => line >= a && line <= b)) {
+        visibleChanged = true;
+      }
+    };
+    for (const { line, tokens, length, exact } of message.lines) {
+      if (line > doc.lines) continue;
+      const text = doc.line(line).text;
+      const current = this.workerLines.get(line);
+      // A quick head pass never replaces tokens the line already has.
+      if (!exact && current?.text === text) continue;
+      this.workerLines.set(line, { text, tokens, length, exact });
+      touch(line);
+    }
+    for (const line of message.drops) {
+      if (this.workerLines.delete(line)) touch(line);
+    }
+    if (message.done) this.workerDoneVersion = message.version;
+    if (visibleChanged) this.onWorkerTokens?.();
+  }
+
+  private visibleLineRanges(): [number, number][] {
+    const view = this.view;
+    if (!view?.state || !view.visibleRanges) return [];
+    const doc = view.state.doc as Text;
+    return view.visibleRanges.map((r: { from: number; to: number }) => [
+      doc.lineAt(r.from).number,
+      doc.lineAt(r.to).number,
+    ]);
+  }
+
+  /**
+   * Worker tokens to show for `line` instead of the editor's own: always when
+   * the editor could not tokenize the whole line, otherwise when they come
+   * from exact states. After an edit they stay until the worker replaces or
+   * drops them; the editor's own tokens would flash the approximate colors.
+   */
+  private workerTokensFor(line: Line, entry: LineCacheEntry): WorkerLine | null {
+    if (this.workerLines.size === 0) return null;
+    const tokens = this.workerLines.get(line.number);
+    if (!tokens || tokens.text !== line.text) return null;
+    const incomplete =
+      entry.tokens === null || entry.tokenizedLength < line.text.length;
+    if (incomplete) return tokens;
+    return tokens.exact ? tokens : null;
+  }
+
+  private closeWorkerSession() {
+    // The last session out terminates the worker; the next editor starts one.
+    if (this.workerSession !== 0 && this.shared.worker?.close(this.workerSession)) {
+      this.shared.worker = null;
+    }
+    this.workerSession = 0;
+    this.workerDoc = null;
+    this.workerLines.clear();
+    this.workerDoneVersion = -1;
+    this.workerSeen = 0;
+    this.workerLang = '';
+    this.workerTheme = '';
+    this.workerViewport = '';
   }
 
   /**
@@ -642,6 +840,7 @@ export class ShikiHighlighter extends Base {
 
     const startLine = doc.lineAt(from).number;
     const endLine = doc.lineAt(to).number;
+    this.syncWorker(doc, langId, finalThemeName, startLine, endLine);
 
     // 1. Starting state: the nearest cached line before the range that is
     //    still trusted after any edits, or a guess for a speculative pass.
@@ -712,7 +911,19 @@ export class ShikiHighlighter extends Base {
           break work;
         }
         state = entry.endState;
-        if (entry.tokens !== null) {
+        const fromWorker = this.workerTokensFor(line, entry);
+        if (fromWorker !== null) {
+          produced += this.emitLineTokens(
+            line,
+            fromWorker.tokens,
+            fromWorker.length,
+            this.workerColorMap,
+            this.workerColorMap[1] || defaultForeground,
+            buildDeco,
+            from,
+            to,
+          );
+        } else if (entry.tokens !== null) {
           produced += this.emitLineTokens(
             line,
             entry.tokens,
