@@ -3,6 +3,7 @@ import { createHighlighterCore } from 'shiki/core';
 import { createOnigurumaEngine } from 'shiki/engine/oniguruma';
 import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
 import { shikiToCodeMirror } from '@cmshiki/shiki';
+import ShikiWorker from './shiki.worker.ts?worker';
 
 const params = new URLSearchParams(location.search);
 const lang = params.get('lang') || 'javascript';
@@ -22,7 +23,7 @@ async function main() {
     engine: engine === 'javascript' ? createJavaScriptRegexEngine() : createOnigurumaEngine(() => import('shiki/wasm')),
   });
   const tokenizeWorker = params.get('worker')
-    ? () => new Worker(new URL('./shiki.worker.ts', import.meta.url), { type: 'module' })
+    ? () => new ShikiWorker({ name: [lang, themeName, engine].join('|') })
     : undefined;
   const { shiki } = await shikiToCodeMirror({ highlighter, lang, theme: themeName, themeStyle: params.get('style') === 'cm' ? 'cm' : 'shiki', tokenizeWorker });
   const view = new EditorView({ doc, parent: document.getElementById('app')!, extensions: params.get('plain') ? [basicSetup] : [basicSetup, shiki] });

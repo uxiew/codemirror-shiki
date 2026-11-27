@@ -495,7 +495,11 @@ export class ShikiHighlighter extends Base {
   }
 
   private get usesWorker(): boolean {
-    return !!this.configs.tokenizeWorker && !this.workerFailed;
+    return (
+      !!this.configs.tokenizeWorker &&
+      !this.workerFailed &&
+      !this.shared.worker?.failed
+    );
   }
 
   private get workerMinLineLength(): number {
@@ -565,27 +569,31 @@ export class ShikiHighlighter extends Base {
     if (this.workerSession === 0 || this.workerDoc !== oldDoc) return;
     // A line edited in place keeps its old tokens, shifted, until the worker
     // has the new ones: a long line would otherwise turn plain for seconds.
-    const patched: [number, WorkerLine][] = [];
+    const patched = new Map<number, WorkerLine>();
+    // Two changes on one line would each shift the original tokens.
+    const touched = new Set<number>();
     changes.iterChanges((fromA, toA, fromB, toB, inserted) => {
       const oldLine = oldDoc.lineAt(fromA);
+      if (touched.has(oldLine.number)) {
+        patched.delete(newDoc.lineAt(fromB).number);
+        return;
+      }
+      touched.add(oldLine.number);
       if (toA > oldLine.to || inserted.lines > 1) return;
       const previous = this.workerLines.get(oldLine.number);
       if (!previous || previous.text !== oldLine.text) return;
       const newLine = newDoc.lineAt(fromB);
       if (toB > newLine.to) return;
       const at = fromA - oldLine.from;
-      patched.push([
-        newLine.number,
-        {
-          text: newLine.text,
-          tokens: shiftTokens(previous.tokens, at, toA - fromA, toB - fromB),
-          length: Math.max(
-            0,
-            previous.length + (previous.length > at ? toB - fromB - (toA - fromA) : 0),
-          ),
-          exact: false,
-        },
-      ]);
+      patched.set(newLine.number, {
+        text: newLine.text,
+        tokens: shiftTokens(previous.tokens, at, toA - fromA, toB - fromB),
+        length: Math.max(
+          0,
+          previous.length + (previous.length > at ? toB - fromB - (toA - fromA) : 0),
+        ),
+        exact: false,
+      });
     });
     remapLineCache(this.workerLines, oldDoc, newDoc, changes);
     for (const [line, entry] of patched) this.workerLines.set(line, entry);
@@ -638,10 +646,7 @@ export class ShikiHighlighter extends Base {
     for (const line of message.drops) {
       if (this.workerLines.delete(line)) touch(line);
     }
-    if (message.done) {
-      if (this.workerDoneVersion !== message.version) visibleChanged = true;
-      this.workerDoneVersion = message.version;
-    }
+    if (message.done) this.workerDoneVersion = message.version;
     if (visibleChanged) this.onWorkerTokens?.();
   }
 
@@ -657,8 +662,9 @@ export class ShikiHighlighter extends Base {
 
   /**
    * Worker tokens to show for `line` instead of the editor's own: always when
-   * the editor could not tokenize the whole line, otherwise only once the
-   * worker has caught up with the document, since its states are exact.
+   * the editor could not tokenize the whole line, otherwise when they come
+   * from exact states. After an edit they stay until the worker replaces or
+   * drops them; the editor's own tokens would flash the approximate colors.
    */
   private workerTokensFor(line: Line, entry: LineCacheEntry): WorkerLine | null {
     if (this.workerLines.size === 0) return null;
@@ -667,13 +673,14 @@ export class ShikiHighlighter extends Base {
     const incomplete =
       entry.tokens === null || entry.tokenizedLength < line.text.length;
     if (incomplete) return tokens;
-    return tokens.exact && this.workerDoneVersion === this.workerVersion
-      ? tokens
-      : null;
+    return tokens.exact ? tokens : null;
   }
 
   private closeWorkerSession() {
-    if (this.workerSession !== 0) this.shared.worker?.close(this.workerSession);
+    // The last session out terminates the worker; the next editor starts one.
+    if (this.workerSession !== 0 && this.shared.worker?.close(this.workerSession)) {
+      this.shared.worker = null;
+    }
     this.workerSession = 0;
     this.workerDoc = null;
     this.workerLines.clear();

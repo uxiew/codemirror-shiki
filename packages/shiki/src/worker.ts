@@ -45,8 +45,8 @@ interface Session {
   theme: string;
   minLength: number;
   cache: Map<number, Entry>;
-  /** Text of the lines that got a quick head pass. */
-  heads: Map<number, string>;
+  /** Lines that got a quick head pass, with the `seq` that sent it. */
+  heads: Map<number, { text: string; seq: number }>;
   visible: [number, number];
   generation: number;
   seq: number;
@@ -85,8 +85,7 @@ export function exposeTokenizer(
   const sessions = new Map<number, Session>();
   const post = (message: FromWorker) => port.postMessage(message);
 
-  port.onmessage = (event: MessageEvent<ToWorker>) => {
-    const message = event.data;
+  const handle = (message: ToWorker) => {
     if (message.type === 'open') {
       const previous = sessions.get(message.session);
       const keep =
@@ -125,6 +124,9 @@ export function exposeTokenizer(
         if (entry.posted) entry.posted = false;
         else entry.redrop = true;
       }
+      for (const [line, head] of session.heads) {
+        if (head.seq > message.seen) session.heads.delete(line);
+      }
       const changes = ChangeSet.fromJSON(message.changes);
       const doc = changes.apply(session.doc);
       remapLineCache(session.cache, session.doc, doc, changes);
@@ -139,6 +141,20 @@ export function exposeTokenizer(
     } else if (message.type === 'close') {
       session.closed = true;
       sessions.delete(message.session);
+    }
+  };
+  port.onmessage = (event: MessageEvent<ToWorker>) => {
+    try {
+      handle(event.data);
+    } catch (error) {
+      const session = sessions.get(event.data.session);
+      if (session) session.closed = true;
+      sessions.delete(event.data.session);
+      post({
+        type: 'error',
+        session: event.data.session,
+        message: String((error as Error)?.message ?? error),
+      });
     }
   };
 
@@ -193,14 +209,14 @@ export function exposeTokenizer(
       const to = Math.min(visible[1], doc.lines);
       for (let n = Math.max(1, visible[0]); n <= to; n++) {
         const text = doc.line(n).text;
-        if (text.length < session.minLength || heads.get(n) === text) continue;
+        if (text.length < session.minLength || heads.get(n)?.text === text) continue;
         const entry = cache.get(n);
         if (entry?.text === text && entry.posted) continue;
         const start =
           entry?.text === text ? entry.exactStart : (cache.get(n - 1)?.exactEnd ?? null);
         const head = text.slice(0, HEAD_CHARS);
         const result = grammar.tokenizeLine2(head, start, 0);
-        heads.set(n, text);
+        heads.set(n, { text, seq: session.seq + 1 });
         lines.push({ line: n, tokens: result.tokens, length: head.length, exact: false });
         // One line per message, so the first visible line shows up first.
         flush(false);

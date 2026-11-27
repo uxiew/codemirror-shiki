@@ -56,4 +56,9 @@ export type FromWorker =
 export interface TokenizerPort {
   postMessage(message: any): void;
   onmessage: ((event: MessageEvent) => void) | null;
+  /** A `Worker` that failed to load or threw; editors fall back to the main thread. */
+  onerror?: ((event: any) => void) | null;
+  onmessageerror?: ((event: any) => void) | null;
+  /** Called once no editor uses the worker anymore. */
+  terminate?(): void;
 }

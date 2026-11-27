@@ -160,6 +160,19 @@ describe('shiki view plugin: tokenizer worker', () => {
     expect(lineTokens(view, plugin)[2]).toEqual([[0, RED]]);
   });
 
+  it('keeps worker colors below a long line while the worker catches up', async () => {
+    const { view, plugin } = await setup(['a', longLine, 'b'].join('\n'));
+    plugin.updateHighlight(view);
+    await waitFor(workerDone(plugin));
+    expect(lineTokens(view, plugin)[2]).toEqual([[0, RED]]);
+
+    view.dispatch({ changes: { from: 0, insert: 'q' } });
+    // The editor alone would color line 3 from an approximate state (white).
+    expect(lineTokens(view, plugin)[2]).toEqual([[0, RED]]);
+    await waitFor(workerDone(plugin));
+    expect(lineTokens(view, plugin)[2]).toEqual([[0, RED]]);
+  });
+
   it('falls back to the main thread when the worker fails', async () => {
     const { view, plugin, main } = await setup(['a', longLine, 'b'].join('\n'), {
       failTheme: true,
@@ -244,5 +257,65 @@ describe('tokenizer worker protocol', () => {
     change(lastSeq);
     await waitFor(() => sent.some((m) => m.done));
     expect(exactLines(sent)).toEqual([]);
+  });
+});
+
+describe('tokenizer worker lifecycle', () => {
+  async function mountWith(port: any, docs: string[]) {
+    const main = mockCore();
+    const { shiki } = await shikiToCodeMirror({
+      highlighter: main.core as any,
+      lang: 'javascript',
+      themes: { dark: 'mock-dark' },
+      defaultColor: 'dark',
+      themeStyle: 'shiki',
+      warnings: false,
+      tokenizeWorker: () => port,
+      workerMinLineLength: LONG,
+    });
+    const editors = docs.map((doc) => {
+      const parent = document.createElement('div');
+      document.body.appendChild(parent);
+      const view = new EditorView({
+        state: EditorState.create({ doc, extensions: [shiki] }),
+        parent,
+      });
+      cleanups.push(() => {
+        view.destroy();
+        parent.remove();
+      });
+      const plugin = (view as any).plugins
+        .map((p: any) => p.value)
+        .find((v: any) => v && 'shikiHighlighter' in v);
+      plugin.updateHighlight(view);
+      return { view, plugin, main };
+    });
+    await waitFor(() => editors.every((e) => e.plugin.shikiHighlighter.workerSession !== 0));
+    return editors;
+  }
+
+  it('falls back to the main thread when the worker script fails', async () => {
+    // Never answers, like a worker whose script did not load.
+    const port: any = { postMessage: vi.fn(), onmessage: null, terminate: vi.fn() };
+    const [{ view, plugin, main }] = await mountWith(port, [['a', longLine, 'b'].join('\n')]);
+    expect(lineTokens(view, plugin)[1]).toEqual([]);
+
+    port.onerror(new Event('error'));
+    expect(plugin.shikiHighlighter.workerFailed).toBe(true);
+    await waitFor(() => plugin.pendingHighlight === null);
+    expect(
+      main.grammar.tokenizeLine2.mock.calls.some(([text]) => text.length >= LONG),
+    ).toBe(true);
+    expect(lineTokens(view, plugin)[1]).toEqual([[0, WHITE], [10, BLUE]]);
+  });
+
+  it('terminates the worker when its last editor is destroyed', async () => {
+    const port: any = { postMessage: vi.fn(), onmessage: null, terminate: vi.fn() };
+    const [a, b] = await mountWith(port, [longLine, longLine]);
+    a.view.destroy();
+    expect(port.terminate).not.toHaveBeenCalled();
+    b.view.destroy();
+    expect(port.terminate).toHaveBeenCalledTimes(1);
+    expect(port.onmessage).toBe(null);
   });
 });

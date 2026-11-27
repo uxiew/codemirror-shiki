@@ -186,7 +186,9 @@ export interface Options<
    * characters. The worker calls `exposeTokenizer` from
    * `@cmshiki/shiki/worker` with a Shiki core that has the same languages and
    * themes. It is called once per extension, and that one worker serves every
-   * editor using the extension; return a new worker on each call.
+   * editor using the extension; return a new worker on each call. The worker
+   * core needs every language and theme the editor may switch to; when the
+   * worker fails, the editor tokenizes on the main thread from then on.
    *
    * @example
    * ```ts
