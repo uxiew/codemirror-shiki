@@ -188,3 +188,4 @@ const { shiki } = await shikiToCodeMirror({
 - Worker 的 Shiki core 要包含编辑器可能切换到的全部语言和主题。缺语言或主题，或者 Worker 出错时，该编辑器改回主线程分词。
 - 一个扩展只创建一个 Worker，所有使用该扩展的编辑器共用，各编辑器状态互相隔离；最后一个编辑器销毁时 Worker 被 terminate。
 - Worker 结果返回前，长行保持开头一段的颜色；编辑长行时先沿用平移后的旧颜色。
+- Worker 里建议用 Oniguruma 引擎，即使主线程用的是 JavaScript 引擎。Worker 按行顺序分词，正在处理的行没结束前，后面的行和编辑后的重新分词都要排队。在一个 1 MB 的压缩 bundle 上（Node 单线程，只算分词），Oniguruma 共 15 秒，JavaScript 引擎共 119 秒，其中一行 13.8 万字符就要 96 秒。
